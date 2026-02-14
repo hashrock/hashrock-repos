@@ -1,0 +1,20 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "hashrock-repos",
+	"main": "./dist/index.js",
+	"compatibility_date": "2026-02-14",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"assets": {
+		"directory": "./dist"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "hashrock-repos-db",
+			"database_id": "a8f5ed42-3464-4556-b33b-d958f07a130d",
+			"migrations_dir": "drizzle/migrations"
+		}
+	]
+}
