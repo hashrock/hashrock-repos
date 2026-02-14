@@ -30,6 +30,7 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
           updatedAt: repo.updated_at,
           language: repo.language,
           starCount: repo.stargazers_count,
+          archived: repo.archived,
           createdAt: repo.created_at,
         })
         .where(eq(repositories.fullName, repo.full_name));
@@ -45,6 +46,7 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
           updatedAt: repo.updated_at,
           language: repo.language,
           starCount: repo.stargazers_count,
+          archived: repo.archived,
           createdAt: repo.created_at,
         })
         .returning()
@@ -194,4 +196,17 @@ export async function addTagsToRepo(
   }
 
   return [...existingNames, ...toAdd];
+}
+
+export async function setRepoArchived(
+  d1: D1Database,
+  repoId: number,
+  archived: boolean
+) {
+  const db = getDb(d1);
+  await db
+    .update(repositories)
+    .set({ archived })
+    .where(eq(repositories.id, repoId));
+  return { repoId, archived };
 }

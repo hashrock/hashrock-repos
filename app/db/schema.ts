@@ -9,6 +9,7 @@ export const repositories = sqliteTable("repositories", {
   updatedAt: text("updated_at").notNull(),
   language: text("language"),
   starCount: integer("star_count").default(0),
+  archived: integer("archived", { mode: "boolean" }).default(false),
   createdAt: text("created_at"),
 });
 

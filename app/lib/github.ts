@@ -6,6 +6,7 @@ export interface GitHubRepo {
   updated_at: string;
   language: string | null;
   stargazers_count: number;
+  archived: boolean;
   created_at: string;
   topics: string[];
 }
@@ -60,6 +61,28 @@ export async function fetchOrgRepos(
     `https://api.github.com/orgs/${org}/repos`,
     token
   );
+}
+
+export async function archiveRepo(
+  token: string,
+  fullName: string
+): Promise<void> {
+  const res = await fetch(
+    `https://api.github.com/repos/${fullName}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "hashrock-repos",
+      },
+      body: JSON.stringify({ archived: true }),
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
+  }
 }
 
 export async function updateRepoTopics(

@@ -10,11 +10,30 @@ interface Repo {
   updatedAt: string;
   language: string | null;
   starCount: number | null;
+  archived: boolean | null;
+  createdAt: string | null;
   tags: string[];
 }
 
 interface Props {
   repos: Repo[];
+}
+
+type SortKey = "updated" | "stars" | "name" | "created";
+
+function sortRepos(list: Repo[], key: SortKey): Repo[] {
+  return [...list].sort((a, b) => {
+    switch (key) {
+      case "updated":
+        return b.updatedAt.localeCompare(a.updatedAt);
+      case "created":
+        return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
+      case "stars":
+        return (b.starCount ?? 0) - (a.starCount ?? 0);
+      case "name":
+        return a.fullName.localeCompare(b.fullName);
+    }
+  });
 }
 
 export default function RepoList({ repos: initialRepos }: Props) {
@@ -23,8 +42,14 @@ export default function RepoList({ repos: initialRepos }: Props) {
   const [bulkTagInput, setBulkTagInput] = useState("");
   const [bulkSaving, setBulkSaving] = useState(false);
   const [filterNoTags, setFilterNoTags] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("updated");
+  const [archiving, setArchiving] = useState<Set<number>>(new Set());
 
-  const displayed = filterNoTags ? repos.filter((r) => r.tags.length === 0) : repos;
+  const filtered = repos
+    .filter((r) => (filterNoTags ? r.tags.length === 0 : true))
+    .filter((r) => (showArchived ? true : !r.archived));
+  const displayed = sortRepos(filtered, sortKey);
 
   const toggleSelect = (id: number) => {
     setSelected((prev) => {
@@ -85,6 +110,26 @@ export default function RepoList({ repos: initialRepos }: Props) {
     }
   };
 
+  const handleArchive = async (repoId: number) => {
+    setArchiving((prev) => new Set(prev).add(repoId));
+    try {
+      const res = await fetch(`/api/repos/${repoId}/archive`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        setRepos((prev) =>
+          prev.map((r) => (r.id === repoId ? { ...r, archived: true } : r))
+        );
+      }
+    } finally {
+      setArchiving((prev) => {
+        const next = new Set(prev);
+        next.delete(repoId);
+        return next;
+      });
+    }
+  };
+
   // TagEditorでタグ変更された時にローカルstateも更新
   const onTagsChange = (repoId: number, newTags: string[]) => {
     setRepos((prev) =>
@@ -102,8 +147,28 @@ export default function RepoList({ repos: initialRepos }: Props) {
             checked={filterNoTags}
             onChange={() => setFilterNoTags(!filterNoTags)}
           />
-          タグなしのみ表示
+          タグなしのみ
         </label>
+
+        <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={() => setShowArchived(!showArchived)}
+          />
+          Archived表示
+        </label>
+
+        <select
+          value={sortKey}
+          onChange={(e) => setSortKey((e.target as HTMLSelectElement).value as SortKey)}
+          class="text-sm px-2 py-1 border rounded bg-white"
+        >
+          <option value="updated">Updated (new)</option>
+          <option value="created">Created (new)</option>
+          <option value="stars">Stars</option>
+          <option value="name">Name (A-Z)</option>
+        </select>
 
         <span class="text-sm text-gray-500">
           {displayed.length} / {repos.length} repos
@@ -190,8 +255,24 @@ export default function RepoList({ repos: initialRepos }: Props) {
                   initialTags={repo.tags}
                   onTagsChange={onTagsChange}
                 />
-                <div class="text-xs text-gray-400 mt-2">
-                  Updated: {new Date(repo.updatedAt).toLocaleDateString()}
+                <div class="flex items-center justify-between mt-2">
+                  <div class="text-xs text-gray-400">
+                    Updated: {new Date(repo.updatedAt).toLocaleDateString()}
+                  </div>
+                  {repo.archived ? (
+                    <span class="text-xs px-2 py-0.5 bg-gray-200 text-gray-500 rounded">
+                      Archived
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleArchive(repo.id)}
+                      disabled={archiving.has(repo.id)}
+                      class="text-xs px-2 py-0.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer disabled:opacity-50"
+                    >
+                      {archiving.has(repo.id) ? "Archiving..." : "Archive"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
