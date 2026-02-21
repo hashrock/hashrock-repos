@@ -19,14 +19,14 @@ export default createRoute(async (c) => {
   }
 
   return c.render(
-    <div class="py-8 px-6">
+    <div class="py-6 px-4 sm:py-8 sm:px-6">
       <title>hashrock repos</title>
       <div class="flex items-center justify-between mb-6">
-        <h1 class="text-3xl font-bold">Projects</h1>
+        <h1 class="text-2xl sm:text-3xl font-bold">Projects</h1>
         <a href="/repos" class="text-sm text-blue-600 hover:underline">All Repositories →</a>
       </div>
 
-      <div class="grid grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {columns.map((col) => {
           const colors = columnColors[col.name]
           return (
