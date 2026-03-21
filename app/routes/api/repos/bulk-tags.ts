@@ -1,8 +1,6 @@
 import { createRoute } from "honox/factory";
-import { getRepoById, addTagsToRepo } from "../../../lib/db";
-import { updateRepoTopics } from "../../../lib/github";
+import { bulkAddTagsWithSync } from "../../../lib/service";
 
-// POST /api/repos/bulk-tags - 複数リポジトリにタグを一括追加
 export const POST = createRoute(async (c) => {
   const { repoIds, tags } = await c.req.json<{
     repoIds: number[];
@@ -13,25 +11,6 @@ export const POST = createRoute(async (c) => {
     return c.json({ error: "repoIds and tags must be arrays" }, 400);
   }
 
-  const results = [];
-  const token = c.env.GITHUB_TOKEN;
-
-  for (const repoId of repoIds) {
-    const updatedTags = await addTagsToRepo(c.env.DB, repoId, tags);
-
-    if (token) {
-      const repo = await getRepoById(c.env.DB, repoId);
-      if (repo) {
-        try {
-          await updateRepoTopics(token, repo.fullName, updatedTags);
-        } catch (_) {
-          // continue even if GitHub sync fails
-        }
-      }
-    }
-
-    results.push({ repoId, tags: updatedTags });
-  }
-
-  return c.json({ updated: results });
+  const result = await bulkAddTagsWithSync(c.env.DB, c.env.GITHUB_TOKEN, repoIds, tags);
+  return c.json({ updated: result.data });
 });

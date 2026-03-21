@@ -1,7 +1,6 @@
 import { createRoute } from 'honox/factory'
 import { listRepos } from '../lib/db'
-
-const KANBAN_COLUMNS = ['backlog', 'ongoing', 'unfinished', 'done'] as const
+import { KANBAN_COLUMNS } from '../lib/constants'
 
 export default createRoute(async (c) => {
   const allRepos = await listRepos(c.env.DB)
@@ -57,10 +56,10 @@ export default createRoute(async (c) => {
                         <span class="text-xs text-gray-400">★ {repo.starCount}</span>
                       )}
                     </div>
-                    {repo.tags.filter((t) => !(['backlog', 'ongoing', 'unfinished', 'done'] as string[]).includes(t)).length > 0 && (
+                    {repo.tags.filter((t) => !(KANBAN_COLUMNS as readonly string[]).includes(t)).length > 0 && (
                       <div class="flex gap-1 mt-2 flex-wrap">
                         {repo.tags
-                          .filter((t) => !(['backlog', 'ongoing', 'unfinished', 'done'] as string[]).includes(t))
+                          .filter((t) => !(KANBAN_COLUMNS as readonly string[]).includes(t))
                           .map((tag) => (
                             <span key={tag} class="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full">
                               {tag}

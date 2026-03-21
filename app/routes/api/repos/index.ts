@@ -1,14 +1,12 @@
 import { createRoute } from "honox/factory";
-import { listRepos, syncRepos } from "../../../lib/db";
-import { fetchUserRepos } from "../../../lib/github";
+import { listRepos } from "../../../lib/db";
+import { syncReposFromGitHub } from "../../../lib/service";
 
-// GET /api/repos - リポジトリ一覧
 export const GET = createRoute(async (c) => {
   const repos = await listRepos(c.env.DB);
   return c.json(repos);
 });
 
-// POST /api/repos/sync - GitHubから同期
 export const POST = createRoute(async (c) => {
   const token = c.env.GITHUB_TOKEN;
   if (!token) {
@@ -20,7 +18,6 @@ export const POST = createRoute(async (c) => {
     return c.json({ error: "username is required" }, 400);
   }
 
-  const repos = await fetchUserRepos(token, username);
-  const result = await syncRepos(c.env.DB, repos);
-  return c.json(result);
+  const result = await syncReposFromGitHub(c.env.DB, token, username);
+  return c.json(result.data);
 });

@@ -1,17 +1,56 @@
-import { drizzle } from "drizzle-orm/d1";
-import { eq } from "drizzle-orm";
+import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
+import { eq, inArray } from "drizzle-orm";
 import { repositories, tags, repositoryTags } from "../db/schema";
 import type { GitHubRepo } from "./github";
 
-export function getDb(d1: D1Database) {
+function getDb(d1: D1Database) {
   return drizzle(d1);
+}
+
+async function ensureTagIds(
+  db: DrizzleD1Database,
+  tagNames: string[]
+): Promise<number[]> {
+  const tagIds: number[] = [];
+
+  for (const name of tagNames) {
+    let tag = await db
+      .select()
+      .from(tags)
+      .where(eq(tags.name, name))
+      .get();
+
+    if (!tag) {
+      tag = await db
+        .insert(tags)
+        .values({ name })
+        .returning()
+        .get();
+    }
+
+    tagIds.push(tag.id);
+  }
+
+  return tagIds;
+}
+
+async function linkRepoTags(
+  db: DrizzleD1Database,
+  repoId: number,
+  tagIds: number[]
+): Promise<void> {
+  for (const tagId of tagIds) {
+    await db
+      .insert(repositoryTags)
+      .values({ repositoryId: repoId, tagId })
+      .onConflictDoNothing();
+  }
 }
 
 export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
   const db = getDb(d1);
 
   for (const repo of repos) {
-    // Upsert repository
     const existing = await db
       .select()
       .from(repositories)
@@ -54,34 +93,13 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
       repoId = inserted.id;
     }
 
-    // Sync tags (topics)
     if (repo.topics && repo.topics.length > 0) {
-      // Remove existing tags for this repo
       await db
         .delete(repositoryTags)
         .where(eq(repositoryTags.repositoryId, repoId));
 
-      for (const topicName of repo.topics) {
-        // Upsert tag
-        let tag = await db
-          .select()
-          .from(tags)
-          .where(eq(tags.name, topicName))
-          .get();
-
-        if (!tag) {
-          tag = await db
-            .insert(tags)
-            .values({ name: topicName })
-            .returning()
-            .get();
-        }
-
-        await db
-          .insert(repositoryTags)
-          .values({ repositoryId: repoId, tagId: tag.id })
-          .onConflictDoNothing();
-      }
+      const tagIds = await ensureTagIds(db, repo.topics);
+      await linkRepoTags(db, repoId, tagIds);
     }
   }
 
@@ -93,24 +111,36 @@ export async function listRepos(d1: D1Database) {
 
   const allRepos = await db.select().from(repositories).all();
 
-  // Fetch tags for each repo
-  const result = await Promise.all(
-    allRepos.map(async (repo) => {
-      const repoTags = await db
-        .select({ name: tags.name })
-        .from(repositoryTags)
-        .innerJoin(tags, eq(repositoryTags.tagId, tags.id))
-        .where(eq(repositoryTags.repositoryId, repo.id))
-        .all();
+  if (allRepos.length === 0) {
+    return [];
+  }
 
-      return {
-        ...repo,
-        tags: repoTags.map((t) => t.name),
-      };
+  const repoIds = allRepos.map((r) => r.id);
+
+  const allRepoTags = await db
+    .select({
+      repositoryId: repositoryTags.repositoryId,
+      tagName: tags.name,
     })
-  );
+    .from(repositoryTags)
+    .innerJoin(tags, eq(repositoryTags.tagId, tags.id))
+    .where(inArray(repositoryTags.repositoryId, repoIds))
+    .all();
 
-  return result;
+  const tagsByRepoId = new Map<number, string[]>();
+  for (const row of allRepoTags) {
+    const existing = tagsByRepoId.get(row.repositoryId);
+    if (existing) {
+      existing.push(row.tagName);
+    } else {
+      tagsByRepoId.set(row.repositoryId, [row.tagName]);
+    }
+  }
+
+  return allRepos.map((repo) => ({
+    ...repo,
+    tags: tagsByRepoId.get(repo.id) ?? [],
+  }));
 }
 
 export async function getRepoById(d1: D1Database, repoId: number) {
@@ -125,37 +155,16 @@ export async function updateRepoTags(
 ) {
   const db = getDb(d1);
 
-  // Remove all existing tags for this repo
   await db
     .delete(repositoryTags)
     .where(eq(repositoryTags.repositoryId, repoId));
 
-  // Add new tags
-  for (const name of tagNames) {
-    let tag = await db
-      .select()
-      .from(tags)
-      .where(eq(tags.name, name))
-      .get();
-
-    if (!tag) {
-      tag = await db
-        .insert(tags)
-        .values({ name })
-        .returning()
-        .get();
-    }
-
-    await db
-      .insert(repositoryTags)
-      .values({ repositoryId: repoId, tagId: tag.id })
-      .onConflictDoNothing();
-  }
+  const tagIds = await ensureTagIds(db, tagNames);
+  await linkRepoTags(db, repoId, tagIds);
 
   return { repoId, tags: tagNames };
 }
 
-// 既存タグを保持しつつ新しいタグを追加（一括追加用）
 export async function addTagsToRepo(
   d1: D1Database,
   repoId: number,
@@ -163,7 +172,6 @@ export async function addTagsToRepo(
 ): Promise<string[]> {
   const db = getDb(d1);
 
-  // 既存タグを取得
   const existingTags = await db
     .select({ name: tags.name })
     .from(repositoryTags)
@@ -174,26 +182,8 @@ export async function addTagsToRepo(
   const existingNames = existingTags.map((t) => t.name);
   const toAdd = newTagNames.filter((n) => !existingNames.includes(n));
 
-  for (const name of toAdd) {
-    let tag = await db
-      .select()
-      .from(tags)
-      .where(eq(tags.name, name))
-      .get();
-
-    if (!tag) {
-      tag = await db
-        .insert(tags)
-        .values({ name })
-        .returning()
-        .get();
-    }
-
-    await db
-      .insert(repositoryTags)
-      .values({ repositoryId: repoId, tagId: tag.id })
-      .onConflictDoNothing();
-  }
+  const tagIds = await ensureTagIds(db, toAdd);
+  await linkRepoTags(db, repoId, tagIds);
 
   return [...existingNames, ...toAdd];
 }
