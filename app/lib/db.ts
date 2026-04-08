@@ -117,15 +117,22 @@ export async function listRepos(d1: D1Database) {
 
   const repoIds = allRepos.map((r) => r.id);
 
-  const allRepoTags = await db
-    .select({
-      repositoryId: repositoryTags.repositoryId,
-      tagName: tags.name,
-    })
-    .from(repositoryTags)
-    .innerJoin(tags, eq(repositoryTags.tagId, tags.id))
-    .where(inArray(repositoryTags.repositoryId, repoIds))
-    .all();
+  // D1 has a 100 binding parameter limit, so chunk the query
+  const CHUNK_SIZE = 80;
+  const allRepoTags: { repositoryId: number; tagName: string }[] = [];
+  for (let i = 0; i < repoIds.length; i += CHUNK_SIZE) {
+    const chunk = repoIds.slice(i, i + CHUNK_SIZE);
+    const rows = await db
+      .select({
+        repositoryId: repositoryTags.repositoryId,
+        tagName: tags.name,
+      })
+      .from(repositoryTags)
+      .innerJoin(tags, eq(repositoryTags.tagId, tags.id))
+      .where(inArray(repositoryTags.repositoryId, chunk))
+      .all();
+    allRepoTags.push(...rows);
+  }
 
   const tagsByRepoId = new Map<number, string[]>();
   for (const row of allRepoTags) {

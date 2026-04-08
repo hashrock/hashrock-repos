@@ -15,6 +15,7 @@ export default createRoute(async (c) => {
     ongoing:    { bg: 'bg-blue-50',   border: 'border-blue-200',  header: 'bg-blue-200 text-blue-800' },
     unfinished: { bg: 'bg-amber-50',  border: 'border-amber-200', header: 'bg-amber-200 text-amber-800' },
     done:       { bg: 'bg-green-50',  border: 'border-green-200', header: 'bg-green-200 text-green-800' },
+    research:   { bg: 'bg-purple-50', border: 'border-purple-200', header: 'bg-purple-200 text-purple-800' },
   }
 
   return c.render(
@@ -24,7 +25,7 @@ export default createRoute(async (c) => {
         <h1 class="text-2xl sm:text-3xl font-bold">Projects</h1>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {columns.map((col) => {
           const colors = columnColors[col.name]
           return (
@@ -76,6 +77,9 @@ export default createRoute(async (c) => {
             </div>
           )
         })}
+      </div>
+      <div class="mt-12 text-center">
+        <a href="/admin/repos" class="text-xs text-gray-400 hover:text-gray-600">Admin</a>
       </div>
     </div>
   )
