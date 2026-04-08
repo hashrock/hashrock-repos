@@ -8,9 +8,10 @@ export default function SyncButton() {
     setLoading(true);
     setMessage("");
     try {
-      const res = await fetch("/api/repos", {
+      const res = await fetch("/admin/api/repos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ username: "hashrock" }),
       });
       const data = (await res.json()) as { synced?: number; error?: string };

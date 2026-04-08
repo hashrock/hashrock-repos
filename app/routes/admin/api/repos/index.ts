@@ -1,6 +1,6 @@
 import { createRoute } from "honox/factory";
-import { listRepos } from "../../../lib/db";
-import { syncReposFromGitHub } from "../../../lib/service";
+import { listRepos } from "../../../../lib/db";
+import { syncReposFromGitHub } from "../../../../lib/service";
 
 export const GET = createRoute(async (c) => {
   const repos = await listRepos(c.env.DB);

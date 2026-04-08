@@ -77,9 +77,10 @@ export default function RepoList({ repos: initialRepos }: Props) {
 
     setBulkSaving(true);
     try {
-      const res = await fetch("/api/repos/bulk-tags", {
+      const res = await fetch("/admin/api/repos/bulk-tags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({
           repoIds: Array.from(selected),
           tags: tagNames,
@@ -113,8 +114,9 @@ export default function RepoList({ repos: initialRepos }: Props) {
   const handleArchive = async (repoId: number) => {
     setArchiving((prev) => new Set(prev).add(repoId));
     try {
-      const res = await fetch(`/api/repos/${repoId}/archive`, {
+      const res = await fetch(`/admin/api/repos/${repoId}/archive`, {
         method: "POST",
+        credentials: "same-origin",
       });
       if (res.ok) {
         setRepos((prev) =>
