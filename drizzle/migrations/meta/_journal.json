@@ -15,6 +15,13 @@
       "when": 1771081185145,
       "tag": "0001_chunky_ravenous",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1775818988537,
+      "tag": "0002_unknown_toad_men",
+      "breakpoints": true
     }
   ]
 }

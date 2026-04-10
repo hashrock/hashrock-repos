@@ -50,12 +50,29 @@ async function linkRepoTags(
 export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
   const db = getDb(d1);
 
+  // 今回の sync で触れた内部 id を記録。最後にここに含まれない行を削除する。
+  const touchedIds = new Set<number>();
+
   for (const repo of repos) {
-    const existing = await db
+    // 不変の github_id で照合するのが正。これが一致すればリネーム/オーナー変更でも同一レコード。
+    let existing = await db
       .select()
       .from(repositories)
-      .where(eq(repositories.fullName, repo.full_name))
+      .where(eq(repositories.githubId, repo.id))
       .get();
+
+    // 移行期フォールバック: github_id 未登録 (nullable) の既存行は full_name で拾って埋め戻す。
+    // 既に別の github_id が入っている行を横取りしないため githubId === null の時だけ採用する。
+    if (!existing) {
+      const byName = await db
+        .select()
+        .from(repositories)
+        .where(eq(repositories.fullName, repo.full_name))
+        .get();
+      if (byName && byName.githubId === null) {
+        existing = byName;
+      }
+    }
 
     let repoId: number;
 
@@ -63,7 +80,9 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
       await db
         .update(repositories)
         .set({
+          githubId: repo.id,
           name: repo.name,
+          fullName: repo.full_name,
           url: repo.html_url,
           description: repo.description,
           updatedAt: repo.updated_at,
@@ -72,12 +91,13 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
           archived: repo.archived,
           createdAt: repo.created_at,
         })
-        .where(eq(repositories.fullName, repo.full_name));
+        .where(eq(repositories.id, existing.id));
       repoId = existing.id;
     } else {
       const inserted = await db
         .insert(repositories)
         .values({
+          githubId: repo.id,
           name: repo.name,
           fullName: repo.full_name,
           url: repo.html_url,
@@ -93,6 +113,8 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
       repoId = inserted.id;
     }
 
+    touchedIds.add(repoId);
+
     if (repo.topics && repo.topics.length > 0) {
       await db
         .delete(repositoryTags)
@@ -103,7 +125,31 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
     }
   }
 
-  return { synced: repos.length };
+  // GitHub から消えた (削除 / 非公開化など) リポジトリを DB からも削除する。
+  // リネームやオーナー変更は github_id で追従済みなので、ここに残るのは本当に消えた行だけ。
+  const allDbRepos = await db
+    .select({ id: repositories.id })
+    .from(repositories)
+    .all();
+  const idsToDelete = allDbRepos
+    .map((r) => r.id)
+    .filter((id) => !touchedIds.has(id));
+
+  if (idsToDelete.length > 0) {
+    // D1 の 100 パラメータ制限に合わせてチャンク削除。FK に cascade がないので先に repositoryTags を消す
+    const CHUNK_SIZE = 80;
+    for (let i = 0; i < idsToDelete.length; i += CHUNK_SIZE) {
+      const chunk = idsToDelete.slice(i, i + CHUNK_SIZE);
+      await db
+        .delete(repositoryTags)
+        .where(inArray(repositoryTags.repositoryId, chunk));
+      await db
+        .delete(repositories)
+        .where(inArray(repositories.id, chunk));
+    }
+  }
+
+  return { synced: repos.length, deleted: idsToDelete.length };
 }
 
 export async function listRepos(d1: D1Database) {

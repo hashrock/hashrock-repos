@@ -43,6 +43,7 @@ beforeEach(() => {
 describe("syncReposFromGitHub", () => {
   it("fetches repos from GitHub and syncs to DB", async () => {
     const mockRepos: GitHubRepo[] = [{
+      id: 12345,
       name: "repo1",
       full_name: "user/repo1",
       html_url: "https://github.com/user/repo1",
@@ -55,13 +56,13 @@ describe("syncReposFromGitHub", () => {
       topics: [],
     }];
     vi.mocked(fetchUserRepos).mockResolvedValue(mockRepos);
-    vi.mocked(syncRepos).mockResolvedValue({ synced: 1 });
+    vi.mocked(syncRepos).mockResolvedValue({ synced: 1, deleted: 0 });
 
     const result = await syncReposFromGitHub(mockD1, "token", "user");
 
     expect(fetchUserRepos).toHaveBeenCalledWith("token", "user");
     expect(syncRepos).toHaveBeenCalledWith(mockD1, mockRepos);
-    expect(result).toEqual({ data: { synced: 1 } });
+    expect(result).toEqual({ data: { synced: 1, deleted: 0 } });
   });
 });
 
@@ -70,6 +71,7 @@ describe("updateRepoTagsWithSync", () => {
     vi.mocked(updateRepoTags).mockResolvedValue({ repoId: 1, tags: ["tag1"] });
     vi.mocked(getRepoById).mockResolvedValue({
       id: 1,
+      githubId: 10001,
       fullName: "user/repo",
       name: "repo",
       url: "https://github.com/user/repo",
@@ -106,6 +108,7 @@ describe("updateRepoTagsWithSync", () => {
     vi.mocked(updateRepoTags).mockResolvedValue({ repoId: 1, tags: ["tag1"] });
     vi.mocked(getRepoById).mockResolvedValue({
       id: 1,
+      githubId: 10001,
       fullName: "user/repo",
       name: "repo",
       url: "https://github.com/user/repo",
@@ -129,6 +132,7 @@ describe("archiveRepoWithSync", () => {
     vi.mocked(setRepoArchived).mockResolvedValue({ repoId: 1, archived: true });
     vi.mocked(getRepoById).mockResolvedValue({
       id: 1,
+      githubId: 10001,
       fullName: "user/repo",
       name: "repo",
       url: "https://github.com/user/repo",
@@ -165,6 +169,7 @@ describe("archiveRepoWithSync", () => {
     vi.mocked(setRepoArchived).mockResolvedValue({ repoId: 1, archived: true });
     vi.mocked(getRepoById).mockResolvedValue({
       id: 1,
+      githubId: 10001,
       fullName: "user/repo",
       name: "repo",
       url: "https://github.com/user/repo",
@@ -191,6 +196,7 @@ describe("bulkAddTagsWithSync", () => {
     vi.mocked(getRepoById)
       .mockResolvedValueOnce({
         id: 1,
+        githubId: 10001,
         fullName: "user/repo1",
         name: "repo1",
         url: "https://github.com/user/repo1",
@@ -203,6 +209,7 @@ describe("bulkAddTagsWithSync", () => {
       })
       .mockResolvedValueOnce({
         id: 2,
+        githubId: 10002,
         fullName: "user/repo2",
         name: "repo2",
         url: "https://github.com/user/repo2",
@@ -231,6 +238,7 @@ describe("bulkAddTagsWithSync", () => {
     vi.mocked(addTagsToRepo).mockResolvedValue(["new"]);
     vi.mocked(getRepoById).mockResolvedValue({
       id: 1,
+      githubId: 10001,
       fullName: "user/repo1",
       name: "repo1",
       url: "https://github.com/user/repo1",
