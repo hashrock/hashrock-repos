@@ -37,7 +37,7 @@ export default createRoute(async (c) => {
   // カンバンは private も含める。ただし列に並ぶのは backlog/ongoing などの
   // タグが付いたものだけなので、タグの無い private は結局どこにも出ない。
   // star したものは「公開してよい」の意思表示として private でもカードに出す。
-  // hide が立っていればカンバンからもカードからも外れる。
+  // hide と archived が立っていればカンバンからもカードからも外れる。
   const allRepos = await listRepos(c.env.DB, { includePrivate: true })
   const starred = await listRepos(c.env.DB, {
     includePrivate: true,

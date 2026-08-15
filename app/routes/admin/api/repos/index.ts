@@ -4,7 +4,11 @@ import { syncReposFromGitHub } from "../../../../lib/service";
 
 // /api は CF Access で保護されているため private も返す
 export const GET = createRoute(async (c) => {
-  const repos = await listRepos(c.env.DB, { includePrivate: true });
+  const repos = await listRepos(c.env.DB, {
+    includePrivate: true,
+    includeHidden: true,
+    includeArchived: true,
+  });
   return c.json(repos);
 });
 

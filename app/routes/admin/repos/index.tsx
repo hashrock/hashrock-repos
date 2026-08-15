@@ -7,6 +7,7 @@ export default createRoute(async (c) => {
   const repos = await listRepos(c.env.DB, {
     includePrivate: true,
     includeHidden: true,
+    includeArchived: true,
   });
 
   return c.render(

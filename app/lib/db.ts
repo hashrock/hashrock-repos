@@ -164,6 +164,8 @@ export interface ListReposOptions {
   includePrivate?: boolean;
   /** hide が立っているリポジトリを含めるか。管理画面でのみ true にする */
   includeHidden?: boolean;
+  /** archived なリポジトリを含めるか。トップページには出さないので既定は false */
+  includeArchived?: boolean;
   /** star が立っているリポジトリだけに絞るか */
   starredOnly?: boolean;
 }
@@ -180,6 +182,9 @@ export async function listRepos(
   }
   if (!options.includeHidden) {
     conditions.push(eq(repositories.hide, false));
+  }
+  if (!options.includeArchived) {
+    conditions.push(eq(repositories.archived, false));
   }
   if (options.starredOnly) {
     conditions.push(eq(repositories.star, true));
