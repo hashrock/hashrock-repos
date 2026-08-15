@@ -116,6 +116,30 @@ export async function archiveRepo(
   }
 }
 
+export async function updateRepoDescription(
+  token: string,
+  fullName: string,
+  description: string | null
+): Promise<void> {
+  const res = await fetch(
+    `https://api.github.com/repos/${fullName}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "hashrock-repos",
+      },
+      // null を渡すと GitHub 側も未設定になる
+      body: JSON.stringify({ description }),
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
+  }
+}
+
 export async function updateRepoTopics(
   token: string,
   fullName: string,

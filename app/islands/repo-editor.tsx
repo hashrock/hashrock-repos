@@ -29,11 +29,21 @@ interface Props {
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
+interface PatchResponse {
+  logoSvg?: string | null;
+  githubSyncErrors?: string[];
+  error?: string;
+}
+
 export default function RepoEditor({ repo }: Props) {
   const [notes, setNotes] = useState(repo.notes ?? "");
   const [star, setStar] = useState(repo.star ?? false);
   const [hide, setHide] = useState(repo.hide ?? false);
   const [coverImageKey, setCoverImageKey] = useState(repo.coverImageKey);
+  const [description, setDescription] = useState(repo.description ?? "");
+  const [savedDescription, setSavedDescription] = useState(repo.description ?? "");
+  const [descriptionError, setDescriptionError] = useState("");
+  const [descriptionSaved, setDescriptionSaved] = useState(false);
   const [logoSvg, setLogoSvg] = useState(repo.logoSvg ?? "");
   const [savedLogoSvg, setSavedLogoSvg] = useState(repo.logoSvg);
   const [logoError, setLogoError] = useState("");
@@ -46,6 +56,7 @@ export default function RepoEditor({ repo }: Props) {
     star?: boolean;
     hide?: boolean;
     logoSvg?: string | null;
+    description?: string | null;
   }) => {
     setSaveState("saving");
     try {
@@ -54,16 +65,33 @@ export default function RepoEditor({ repo }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await res.json()) as {
-        logoSvg?: string | null;
-        error?: string;
-      };
+      const data = (await res.json()) as PatchResponse;
       setSaveState(res.ok ? "saved" : "error");
       return { ok: res.ok, data };
     } catch {
       setSaveState("error");
-      return { ok: false, data: {} as { logoSvg?: string | null; error?: string } };
+      return { ok: false, data: {} as PatchResponse };
     }
+  };
+
+  const saveDescription = async () => {
+    if (description === savedDescription) return;
+    setDescriptionError("");
+    setDescriptionSaved(false);
+    const { ok, data } = await patch({ description });
+    if (!ok) {
+      setDescriptionError(data.error ?? "保存に失敗しました");
+      return;
+    }
+    // DB は更新できても GitHub 側が失敗することがある。次の sync で戻るので伝える
+    if (data.githubSyncErrors?.length) {
+      setDescriptionError(
+        `DBは更新しましたが GitHub に反映できませんでした: ${data.githubSyncErrors[0]}`
+      );
+      return;
+    }
+    setSavedDescription(description);
+    setDescriptionSaved(true);
   };
 
   const saveLogoSvg = async () => {
@@ -161,9 +189,26 @@ export default function RepoEditor({ repo }: Props) {
         </div>
       </div>
 
-      {repo.description && (
-        <p class="text-gray-600 mb-2">{repo.description}</p>
-      )}
+      <div class="mb-2">
+        <input
+          type="text"
+          value={description}
+          onInput={(e) => {
+            setDescription((e.target as HTMLInputElement).value);
+            setDescriptionError("");
+          }}
+          onBlur={saveDescription}
+          placeholder="Description (GitHub にも反映されます)"
+          class="w-full px-2 py-1 -mx-2 text-gray-600 bg-transparent border border-transparent rounded hover:border-gray-200 focus:border-blue-400 focus:bg-white outline-none"
+        />
+        {descriptionError ? (
+          <p class="text-xs text-red-600 mt-1">{descriptionError}</p>
+        ) : (
+          descriptionSaved && (
+            <p class="text-xs text-gray-400 mt-1">GitHub に反映しました</p>
+          )
+        )}
+      </div>
 
       <div class="flex items-center gap-3 text-sm text-gray-500 mb-6">
         <a

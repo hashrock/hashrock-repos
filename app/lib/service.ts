@@ -4,10 +4,12 @@ import {
   updateRepoTags,
   addTagsToRepo,
   setRepoArchived,
+  setRepoDescription,
 } from "./db";
 import {
   fetchUserRepos,
   updateRepoTopics,
+  updateRepoDescription,
   archiveRepo,
 } from "./github";
 
@@ -45,6 +47,32 @@ export async function updateRepoTagsWithSync(
 
   try {
     await updateRepoTopics(token, repo.fullName, tagNames);
+  } catch (e) {
+    return { data, githubSyncErrors: [String(e)] };
+  }
+
+  return { data };
+}
+
+export async function updateRepoDescriptionWithSync(
+  d1: D1Database,
+  token: string | undefined,
+  repoId: number,
+  description: string | null
+): Promise<ServiceResult<{ repoId: number; description: string | null }>> {
+  const data = await setRepoDescription(d1, repoId, description);
+
+  if (!token) {
+    return { data };
+  }
+
+  const repo = await getRepoById(d1, repoId);
+  if (!repo) {
+    return { data };
+  }
+
+  try {
+    await updateRepoDescription(token, repo.fullName, description);
   } catch (e) {
     return { data, githubSyncErrors: [String(e)] };
   }

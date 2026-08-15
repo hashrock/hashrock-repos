@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   updateRepoTagsWithSync,
+  updateRepoDescriptionWithSync,
   archiveRepoWithSync,
   bulkAddTagsWithSync,
   syncReposFromGitHub,
@@ -13,11 +14,13 @@ vi.mock("../db", () => ({
   updateRepoTags: vi.fn(),
   addTagsToRepo: vi.fn(),
   setRepoArchived: vi.fn(),
+  setRepoDescription: vi.fn(),
 }));
 
 vi.mock("../github", () => ({
   fetchUserRepos: vi.fn(),
   updateRepoTopics: vi.fn(),
+  updateRepoDescription: vi.fn(),
   archiveRepo: vi.fn(),
 }));
 
@@ -27,10 +30,12 @@ import {
   updateRepoTags,
   addTagsToRepo,
   setRepoArchived,
+  setRepoDescription,
 } from "../db";
 import {
   fetchUserRepos,
   updateRepoTopics,
+  updateRepoDescription,
   archiveRepo,
 } from "../github";
 
@@ -202,5 +207,68 @@ describe("bulkAddTagsWithSync", () => {
     const result = await bulkAddTagsWithSync(mockD1, "token", [1], ["new"]);
 
     expect(result.githubSyncErrors).toHaveLength(1);
+  });
+});
+
+describe("updateRepoDescriptionWithSync", () => {
+  it("writes the description to the DB and back to GitHub", async () => {
+    vi.mocked(setRepoDescription).mockResolvedValue({
+      repoId: 1,
+      description: "new desc",
+    });
+    vi.mocked(getRepoById).mockResolvedValue(repoRow());
+    vi.mocked(updateRepoDescription).mockResolvedValue(undefined);
+
+    const result = await updateRepoDescriptionWithSync(
+      mockD1,
+      "token",
+      1,
+      "new desc"
+    );
+
+    expect(setRepoDescription).toHaveBeenCalledWith(mockD1, 1, "new desc");
+    expect(updateRepoDescription).toHaveBeenCalledWith(
+      "token",
+      "user/repo",
+      "new desc"
+    );
+    expect(result).toEqual({ data: { repoId: 1, description: "new desc" } });
+  });
+
+  it("passes null through so GitHub clears the description", async () => {
+    vi.mocked(setRepoDescription).mockResolvedValue({
+      repoId: 1,
+      description: null,
+    });
+    vi.mocked(getRepoById).mockResolvedValue(repoRow());
+    vi.mocked(updateRepoDescription).mockResolvedValue(undefined);
+
+    await updateRepoDescriptionWithSync(mockD1, "token", 1, null);
+
+    expect(updateRepoDescription).toHaveBeenCalledWith("token", "user/repo", null);
+  });
+
+  it("skips GitHub sync when token is undefined", async () => {
+    vi.mocked(setRepoDescription).mockResolvedValue({
+      repoId: 1,
+      description: "x",
+    });
+
+    await updateRepoDescriptionWithSync(mockD1, undefined, 1, "x");
+
+    expect(updateRepoDescription).not.toHaveBeenCalled();
+  });
+
+  it("reports githubSyncErrors when GitHub rejects the write", async () => {
+    vi.mocked(setRepoDescription).mockResolvedValue({
+      repoId: 1,
+      description: "x",
+    });
+    vi.mocked(getRepoById).mockResolvedValue(repoRow());
+    vi.mocked(updateRepoDescription).mockRejectedValue(new Error("API error"));
+
+    const result = await updateRepoDescriptionWithSync(mockD1, "token", 1, "x");
+
+    expect(result.githubSyncErrors).toEqual(["Error: API error"]);
   });
 });

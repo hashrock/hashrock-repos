@@ -298,6 +298,23 @@ export async function updateRepoMeta(
   return getRepoById(d1, repoId);
 }
 
+/**
+ * description は GitHub 由来なので、DB だけ書き換えても次の sync で戻る。
+ * 呼ぶのは GitHub にも書き戻すサービス層からだけにすること。
+ */
+export async function setRepoDescription(
+  d1: D1Database,
+  repoId: number,
+  description: string | null
+) {
+  const db = getDb(d1);
+  await db
+    .update(repositories)
+    .set({ description })
+    .where(eq(repositories.id, repoId));
+  return { repoId, description };
+}
+
 export async function setRepoCoverImageKey(
   d1: D1Database,
   repoId: number,
