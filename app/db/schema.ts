@@ -23,6 +23,10 @@ export const repositories = sqliteTable("repositories", {
   hide: integer("hide", { mode: "boolean" }).default(false),
   // R2 のオブジェクトキー。/images/{key} で配信する
   coverImageKey: text("cover_image_key"),
+  // GitHub の homepage。カードのリンク先はここを優先し、無ければ url に落とす
+  homepage: text("homepage"),
+  // 手で貼り付けた SVG マークアップ。カードにインラインで描画する
+  logoSvg: text("logo_svg"),
 });
 
 export const tags = sqliteTable("tags", {

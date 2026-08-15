@@ -11,6 +11,7 @@ export interface GitHubRepo {
   created_at: string;
   topics: string[];
   private: boolean;
+  homepage: string | null;
 }
 
 async function fetchAllPages(

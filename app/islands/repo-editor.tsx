@@ -18,6 +18,8 @@ interface Repo {
   star: boolean | null;
   hide: boolean | null;
   coverImageKey: string | null;
+  homepage: string | null;
+  logoSvg: string | null;
   tags: string[];
 }
 
@@ -32,6 +34,9 @@ export default function RepoEditor({ repo }: Props) {
   const [star, setStar] = useState(repo.star ?? false);
   const [hide, setHide] = useState(repo.hide ?? false);
   const [coverImageKey, setCoverImageKey] = useState(repo.coverImageKey);
+  const [logoSvg, setLogoSvg] = useState(repo.logoSvg ?? "");
+  const [savedLogoSvg, setSavedLogoSvg] = useState(repo.logoSvg);
+  const [logoError, setLogoError] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [uploadError, setUploadError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -40,6 +45,7 @@ export default function RepoEditor({ repo }: Props) {
     notes?: string;
     star?: boolean;
     hide?: boolean;
+    logoSvg?: string | null;
   }) => {
     setSaveState("saving");
     try {
@@ -48,9 +54,28 @@ export default function RepoEditor({ repo }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      const data = (await res.json()) as {
+        logoSvg?: string | null;
+        error?: string;
+      };
       setSaveState(res.ok ? "saved" : "error");
+      return { ok: res.ok, data };
     } catch {
       setSaveState("error");
+      return { ok: false, data: {} as { logoSvg?: string | null; error?: string } };
+    }
+  };
+
+  const saveLogoSvg = async () => {
+    if (logoSvg === (savedLogoSvg ?? "")) return;
+    setLogoError("");
+    const { ok, data } = await patch({ logoSvg });
+    if (ok) {
+      // サーバ側でサニタイズされた結果を正とする
+      setSavedLogoSvg(data.logoSvg ?? null);
+      setLogoSvg(data.logoSvg ?? "");
+    } else {
+      setLogoError(data.error ?? "保存に失敗しました");
     }
   };
 
@@ -149,6 +174,16 @@ export default function RepoEditor({ repo }: Props) {
         >
           GitHub ↗
         </a>
+        {repo.homepage && (
+          <a
+            href={repo.homepage}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-blue-600 hover:underline break-all"
+          >
+            {repo.homepage} ↗
+          </a>
+        )}
         {repo.language && <span>{repo.language}</span>}
         {(repo.starCount ?? 0) > 0 && <span>★ {repo.starCount}</span>}
         <span>Updated {new Date(repo.updatedAt).toLocaleDateString()}</span>
@@ -270,6 +305,66 @@ export default function RepoEditor({ repo }: Props) {
           {uploadError && (
             <p class="text-xs text-red-600 mt-1">{uploadError}</p>
           )}
+        </div>
+      </section>
+
+      {/* ロゴ SVG */}
+      <section class="mb-8">
+        <h2 class="text-sm font-semibold text-gray-700 mb-2">
+          ロゴ (SVG)
+          <span class="ml-2 font-normal text-gray-400">
+            カードのタイトル横に表示されます
+          </span>
+        </h2>
+        <div class="flex items-start gap-4">
+          <div class="w-16 h-16 shrink-0 border rounded flex items-center justify-center bg-gray-50 overflow-hidden">
+            {savedLogoSvg ? (
+              <span
+                class="block w-10 h-10 [&>svg]:w-full [&>svg]:h-full"
+                dangerouslySetInnerHTML={{ __html: savedLogoSvg }}
+              />
+            ) : (
+              <span class="text-xs text-gray-400">なし</span>
+            )}
+          </div>
+          <div class="flex-1">
+            <textarea
+              value={logoSvg}
+              onInput={(e) => {
+                setLogoSvg((e.target as HTMLTextAreaElement).value);
+                setLogoError("");
+              }}
+              onBlur={saveLogoSvg}
+              rows={5}
+              placeholder='<svg viewBox="0 0 24 24">...</svg>'
+              class="w-full px-3 py-2 border rounded font-mono text-xs outline-none focus:border-blue-400"
+            />
+            <div class="flex items-center justify-between mt-1">
+              <span class="text-xs text-gray-400">
+                SVG マークアップを貼り付け。フォーカスを外すと保存されます
+              </span>
+              {savedLogoSvg && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setLogoSvg("");
+                    setLogoError("");
+                    const { ok } = await patch({ logoSvg: null });
+                    if (ok) setSavedLogoSvg(null);
+                  }}
+                  class="text-xs text-gray-400 hover:text-red-600 cursor-pointer"
+                >
+                  削除
+                </button>
+              )}
+            </div>
+            {logoError && (
+              <p class="text-xs text-red-600 mt-1">{logoError}</p>
+            )}
+            <p class="text-xs text-gray-400 mt-1">
+              script・イベントハンドラ・外部参照は保存時に除去されます
+            </p>
+          </div>
         </div>
       </section>
 

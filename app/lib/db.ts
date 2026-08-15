@@ -90,6 +90,7 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
           starCount: repo.stargazers_count,
           archived: repo.archived,
           isPrivate: repo.private,
+          homepage: repo.homepage,
           createdAt: repo.created_at,
         })
         .where(eq(repositories.id, existing.id));
@@ -108,6 +109,7 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
           starCount: repo.stargazers_count,
           archived: repo.archived,
           isPrivate: repo.private,
+          homepage: repo.homepage,
           createdAt: repo.created_at,
         })
         .returning()
@@ -261,6 +263,7 @@ export interface RepoMetaPatch {
   notes?: string | null;
   star?: boolean;
   hide?: boolean;
+  logoSvg?: string | null;
 }
 
 /**
@@ -278,6 +281,7 @@ export async function updateRepoMeta(
   if (patch.notes !== undefined) values.notes = patch.notes;
   if (patch.star !== undefined) values.star = patch.star;
   if (patch.hide !== undefined) values.hide = patch.hide;
+  if (patch.logoSvg !== undefined) values.logoSvg = patch.logoSvg;
 
   if (Object.keys(values).length > 0) {
     await db

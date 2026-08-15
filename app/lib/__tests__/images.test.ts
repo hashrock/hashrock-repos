@@ -41,6 +41,8 @@ function repoRow(overrides: Record<string, unknown> = {}) {
     star: false,
     hide: false,
     coverImageKey: null,
+    homepage: null,
+    logoSvg: null,
     ...overrides,
   };
 }

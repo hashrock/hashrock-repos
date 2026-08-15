@@ -36,26 +36,57 @@ import {
 
 const mockD1 = {} as D1Database;
 
+/** repositories の 1 行。列が増えてもここだけ直せば済むようにする */
+function repoRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    githubId: 1001,
+    name: "repo",
+    fullName: "user/repo",
+    url: "https://github.com/user/repo",
+    description: null,
+    updatedAt: "2024-01-01",
+    language: null,
+    starCount: 0,
+    archived: false,
+    isPrivate: false,
+    createdAt: "2024-01-01",
+    notes: null,
+    star: false,
+    hide: false,
+    coverImageKey: null,
+    homepage: null,
+    logoSvg: null,
+    ...overrides,
+  };
+}
+
+/** GitHub API が返すリポジトリ 1 件 */
+function githubRepo(): GitHubRepo {
+  return {
+    id: 12345,
+    name: "repo1",
+    full_name: "user/repo1",
+    html_url: "https://github.com/user/repo1",
+    description: null,
+    updated_at: "2024-01-01",
+    language: null,
+    stargazers_count: 0,
+    archived: false,
+    created_at: "2024-01-01",
+    topics: [],
+    private: false,
+    homepage: null,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe("syncReposFromGitHub", () => {
   it("fetches repos from GitHub and syncs to DB", async () => {
-    const mockRepos: GitHubRepo[] = [{
-      id: 12345,
-      name: "repo1",
-      full_name: "user/repo1",
-      html_url: "https://github.com/user/repo1",
-      description: null,
-      updated_at: "2024-01-01",
-      language: null,
-      stargazers_count: 0,
-      archived: false,
-      created_at: "2024-01-01",
-      topics: [],
-      private: false,
-    }];
+    const mockRepos: GitHubRepo[] = [githubRepo()];
     vi.mocked(fetchUserRepos).mockResolvedValue(mockRepos);
     vi.mocked(syncRepos).mockResolvedValue({ synced: 1, deleted: 0 });
 
@@ -70,24 +101,7 @@ describe("syncReposFromGitHub", () => {
 describe("updateRepoTagsWithSync", () => {
   it("updates tags and syncs to GitHub", async () => {
     vi.mocked(updateRepoTags).mockResolvedValue({ repoId: 1, tags: ["tag1"] });
-    vi.mocked(getRepoById).mockResolvedValue({
-      id: 1,
-      githubId: 10001,
-      fullName: "user/repo",
-      name: "repo",
-      url: "https://github.com/user/repo",
-      description: null,
-      updatedAt: "2024-01-01",
-      language: null,
-      starCount: 0,
-      archived: false,
-      isPrivate: false,
-      createdAt: "2024-01-01",
-      notes: null,
-      star: false,
-      hide: false,
-      coverImageKey: null,
-    });
+    vi.mocked(getRepoById).mockResolvedValue(repoRow());
     vi.mocked(updateRepoTopics).mockResolvedValue(undefined);
 
     const result = await updateRepoTagsWithSync(mockD1, "token", 1, ["tag1"]);
@@ -112,24 +126,7 @@ describe("updateRepoTagsWithSync", () => {
 
   it("returns githubSyncErrors when GitHub sync fails", async () => {
     vi.mocked(updateRepoTags).mockResolvedValue({ repoId: 1, tags: ["tag1"] });
-    vi.mocked(getRepoById).mockResolvedValue({
-      id: 1,
-      githubId: 10001,
-      fullName: "user/repo",
-      name: "repo",
-      url: "https://github.com/user/repo",
-      description: null,
-      updatedAt: "2024-01-01",
-      language: null,
-      starCount: 0,
-      archived: false,
-      isPrivate: false,
-      createdAt: "2024-01-01",
-      notes: null,
-      star: false,
-      hide: false,
-      coverImageKey: null,
-    });
+    vi.mocked(getRepoById).mockResolvedValue(repoRow());
     vi.mocked(updateRepoTopics).mockRejectedValue(new Error("API error"));
 
     const result = await updateRepoTagsWithSync(mockD1, "token", 1, ["tag1"]);
@@ -141,24 +138,7 @@ describe("updateRepoTagsWithSync", () => {
 describe("archiveRepoWithSync", () => {
   it("archives repo and syncs to GitHub", async () => {
     vi.mocked(setRepoArchived).mockResolvedValue({ repoId: 1, archived: true });
-    vi.mocked(getRepoById).mockResolvedValue({
-      id: 1,
-      githubId: 10001,
-      fullName: "user/repo",
-      name: "repo",
-      url: "https://github.com/user/repo",
-      description: null,
-      updatedAt: "2024-01-01",
-      language: null,
-      starCount: 0,
-      archived: false,
-      isPrivate: false,
-      createdAt: "2024-01-01",
-      notes: null,
-      star: false,
-      hide: false,
-      coverImageKey: null,
-    });
+    vi.mocked(getRepoById).mockResolvedValue(repoRow());
     vi.mocked(archiveRepo).mockResolvedValue(undefined);
 
     const result = await archiveRepoWithSync(mockD1, "token", 1);
@@ -183,24 +163,7 @@ describe("archiveRepoWithSync", () => {
 
   it("returns githubSyncErrors when GitHub sync fails", async () => {
     vi.mocked(setRepoArchived).mockResolvedValue({ repoId: 1, archived: true });
-    vi.mocked(getRepoById).mockResolvedValue({
-      id: 1,
-      githubId: 10001,
-      fullName: "user/repo",
-      name: "repo",
-      url: "https://github.com/user/repo",
-      description: null,
-      updatedAt: "2024-01-01",
-      language: null,
-      starCount: 0,
-      archived: false,
-      isPrivate: false,
-      createdAt: "2024-01-01",
-      notes: null,
-      star: false,
-      hide: false,
-      coverImageKey: null,
-    });
+    vi.mocked(getRepoById).mockResolvedValue(repoRow());
     vi.mocked(archiveRepo).mockRejectedValue(new Error("API error"));
 
     const result = await archiveRepoWithSync(mockD1, "token", 1);
@@ -215,42 +178,8 @@ describe("bulkAddTagsWithSync", () => {
       .mockResolvedValueOnce(["existing", "new"])
       .mockResolvedValueOnce(["new"]);
     vi.mocked(getRepoById)
-      .mockResolvedValueOnce({
-        id: 1,
-        githubId: 10001,
-        fullName: "user/repo1",
-        name: "repo1",
-        url: "https://github.com/user/repo1",
-        description: null,
-        updatedAt: "2024-01-01",
-        language: null,
-        starCount: 0,
-        archived: false,
-        isPrivate: false,
-        createdAt: "2024-01-01",
-        notes: null,
-        star: false,
-        hide: false,
-        coverImageKey: null,
-      })
-      .mockResolvedValueOnce({
-        id: 2,
-        githubId: 10002,
-        fullName: "user/repo2",
-        name: "repo2",
-        url: "https://github.com/user/repo2",
-        description: null,
-        updatedAt: "2024-01-01",
-        language: null,
-        starCount: 0,
-        archived: false,
-        isPrivate: false,
-        createdAt: "2024-01-01",
-        notes: null,
-        star: false,
-        hide: false,
-        coverImageKey: null,
-      });
+      .mockResolvedValueOnce(repoRow({ name: "repo1", fullName: "user/repo1", url: "https://github.com/user/repo1" }))
+      .mockResolvedValueOnce(repoRow({ id: 2, name: "repo2", fullName: "user/repo2", url: "https://github.com/user/repo2" }));
     vi.mocked(updateRepoTopics).mockResolvedValue(undefined);
 
     const result = await bulkAddTagsWithSync(mockD1, "token", [1, 2], ["new"]);
@@ -267,24 +196,7 @@ describe("bulkAddTagsWithSync", () => {
 
   it("collects GitHub sync errors without stopping", async () => {
     vi.mocked(addTagsToRepo).mockResolvedValue(["new"]);
-    vi.mocked(getRepoById).mockResolvedValue({
-      id: 1,
-      githubId: 10001,
-      fullName: "user/repo1",
-      name: "repo1",
-      url: "https://github.com/user/repo1",
-      description: null,
-      updatedAt: "2024-01-01",
-      language: null,
-      starCount: 0,
-      archived: false,
-      isPrivate: false,
-      createdAt: "2024-01-01",
-      notes: null,
-      star: false,
-      hide: false,
-      coverImageKey: null,
-    });
+    vi.mocked(getRepoById).mockResolvedValue(repoRow({ name: "repo1", fullName: "user/repo1", url: "https://github.com/user/repo1" }));
     vi.mocked(updateRepoTopics).mockRejectedValue(new Error("API error"));
 
     const result = await bulkAddTagsWithSync(mockD1, "token", [1], ["new"]);
