@@ -49,10 +49,13 @@ export default function RepoList({ repos: initialRepos }: Props) {
   const [showArchived, setShowArchived] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("updated");
   const [archiving, setArchiving] = useState<Set<number>>(new Set());
+  const [hiding, setHiding] = useState<Set<number>>(new Set());
+  const [showHidden, setShowHidden] = useState(false);
 
   const filtered = repos
     .filter((r) => (filterNoTags ? r.tags.length === 0 : true))
-    .filter((r) => (showArchived ? true : !r.archived));
+    .filter((r) => (showArchived ? true : !r.archived))
+    .filter((r) => (showHidden ? true : !r.hide));
   const displayed = sortRepos(filtered, sortKey);
 
   const toggleSelect = (id: number) => {
@@ -136,6 +139,37 @@ export default function RepoList({ repos: initialRepos }: Props) {
     }
   };
 
+  const toggleHide = async (repoId: number, next: boolean) => {
+    setHiding((prev) => new Set(prev).add(repoId));
+    // 先に反映して戻りを待たせない。失敗したら戻す
+    setRepos((prev) =>
+      prev.map((r) => (r.id === repoId ? { ...r, hide: next } : r))
+    );
+    try {
+      const res = await apiFetch(`/admin/api/repos/${repoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ hide: next }),
+      });
+      if (!res.ok) {
+        setRepos((prev) =>
+          prev.map((r) => (r.id === repoId ? { ...r, hide: !next } : r))
+        );
+      }
+    } catch {
+      setRepos((prev) =>
+        prev.map((r) => (r.id === repoId ? { ...r, hide: !next } : r))
+      );
+    } finally {
+      setHiding((prev) => {
+        const nextSet = new Set(prev);
+        nextSet.delete(repoId);
+        return nextSet;
+      });
+    }
+  };
+
   // TagEditorでタグ変更された時にローカルstateも更新
   const onTagsChange = (repoId: number, newTags: string[]) => {
     setRepos((prev) =>
@@ -163,6 +197,15 @@ export default function RepoList({ repos: initialRepos }: Props) {
             onChange={() => setShowArchived(!showArchived)}
           />
           Archived表示
+        </label>
+
+        <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showHidden}
+            onChange={() => setShowHidden(!showHidden)}
+          />
+          Hidden表示
         </label>
 
         <select
@@ -288,20 +331,40 @@ export default function RepoList({ repos: initialRepos }: Props) {
                       Edit
                     </a>
                   </div>
-                  {repo.archived ? (
-                    <span class="text-xs px-2 py-0.5 bg-gray-200 text-gray-500 rounded">
-                      Archived
-                    </span>
-                  ) : (
+                  <div class="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => handleArchive(repo.id)}
-                      disabled={archiving.has(repo.id)}
-                      class="text-xs px-2 py-0.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer disabled:opacity-50"
+                      onClick={() => toggleHide(repo.id, !repo.hide)}
+                      disabled={hiding.has(repo.id)}
+                      title={
+                        repo.hide
+                          ? "トップページに戻す"
+                          : "トップページから外す"
+                      }
+                      class={`text-xs px-2 py-0.5 rounded cursor-pointer disabled:opacity-50 ${
+                        repo.hide
+                          ? "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                          : "text-gray-400 hover:text-gray-800 hover:bg-gray-100"
+                      }`}
                     >
-                      {archiving.has(repo.id) ? "Archiving..." : "Archive"}
+                      {repo.hide ? "Unhide" : "Hide"}
                     </button>
-                  )}
+
+                    {repo.archived ? (
+                      <span class="text-xs px-2 py-0.5 bg-gray-200 text-gray-500 rounded">
+                        Archived
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleArchive(repo.id)}
+                        disabled={archiving.has(repo.id)}
+                        class="text-xs px-2 py-0.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer disabled:opacity-50"
+                      >
+                        {archiving.has(repo.id) ? "Archiving..." : "Archive"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
