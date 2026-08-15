@@ -79,6 +79,13 @@ export default createRoute(async (c) => {
   return c.render(
     <div class="py-6 px-4 sm:py-8 sm:px-6 max-w-[1440px] mx-auto">
       <title>hashrock repos</title>
+      <img
+        src="/logo.svg"
+        alt="hashrock repos"
+        width={300}
+        height={300}
+        class="w-[300px] max-w-full h-auto mb-4"
+      />
       {starred.length > 0 && (
         <div class="mb-10">
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
