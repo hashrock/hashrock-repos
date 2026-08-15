@@ -10,10 +10,35 @@ function GitHubMark() {
   )
 }
 
+function LockMark() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true">
+      <path d="M4 5V4a4 4 0 1 1 8 0v1h.5A1.5 1.5 0 0 1 14 6.5v7A1.5 1.5 0 0 1 12.5 15h-9A1.5 1.5 0 0 1 2 13.5v-7A1.5 1.5 0 0 1 3.5 5H4Zm1.5 0h5V4a2.5 2.5 0 0 0-5 0v1Z" />
+    </svg>
+  )
+}
+
+/**
+ * カードのリンク先。private リポジトリへのリンクは訪問者には 404 にしかならず、
+ * 存在を晒すだけなので出さない。private は homepage があるときだけ開ける。
+ */
+function cardHref(repo: {
+  isPrivate: boolean | null
+  homepage: string | null
+  url: string
+}): string | null {
+  if (repo.isPrivate) {
+    return repo.homepage || null
+  }
+  return repo.homepage || repo.url
+}
+
 export default createRoute(async (c) => {
-  // カンバンは public のみ。star したものは「公開してよい」の意思表示として
-  // private でもカードに出す (hide が立っていれば両方から外れる)
-  const allRepos = await listRepos(c.env.DB)
+  // カンバンは private も含める。ただし列に並ぶのは backlog/ongoing などの
+  // タグが付いたものだけなので、タグの無い private は結局どこにも出ない。
+  // star したものは「公開してよい」の意思表示として private でもカードに出す。
+  // hide が立っていればカンバンからもカードからも外れる。
+  const allRepos = await listRepos(c.env.DB, { includePrivate: true })
   const starred = await listRepos(c.env.DB, {
     includePrivate: true,
     starredOnly: true,
@@ -84,26 +109,40 @@ export default createRoute(async (c) => {
                   )}
                 </div>
 
-                {/* カード全体のクリックは homepage へ。無ければ GitHub に落とす */}
-                <a
-                  href={repo.homepage || repo.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="absolute inset-0"
-                  aria-label={repo.name}
-                />
-                {/* GitHub はオーバーレイより前面に置く */}
-                {repo.homepage && (
+                {/*
+                  カード全体のクリックは homepage へ。private は誰でも開ける
+                  リンクが homepage しか無いので、無ければクリック不可にする
+                */}
+                {cardHref(repo) && (
                   <a
-                    href={repo.url}
+                    href={cardHref(repo)!}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label={`${repo.name} on GitHub`}
-                    title="GitHub"
-                    class="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-white/90 text-gray-400 hover:text-gray-900 shadow-sm"
+                    class="absolute inset-0"
+                    aria-label={repo.name}
+                  />
+                )}
+                {/* private は鍵、public はリポジトリへの導線。オーバーレイより前面 */}
+                {repo.isPrivate ? (
+                  <span
+                    title="Private repository"
+                    class="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-white/90 text-gray-400 shadow-sm"
                   >
-                    <GitHubMark />
-                  </a>
+                    <LockMark />
+                  </span>
+                ) : (
+                  repo.homepage && (
+                    <a
+                      href={repo.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${repo.name} on GitHub`}
+                      title="GitHub"
+                      class="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-white/90 text-gray-400 hover:text-gray-900 shadow-sm"
+                    >
+                      <GitHubMark />
+                    </a>
+                  )
                 )}
               </div>
             ))}
@@ -164,24 +203,35 @@ export default createRoute(async (c) => {
                       </div>
                     )}
 
-                    <a
-                      href={repo.homepage || repo.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="absolute inset-0"
-                      aria-label={repo.name}
-                    />
-                    {repo.homepage && (
+                    {cardHref(repo) && (
                       <a
-                        href={repo.url}
+                        href={cardHref(repo)!}
                         target="_blank"
                         rel="noopener noreferrer"
-                        aria-label={`${repo.name} on GitHub`}
-                        title="GitHub"
-                        class="absolute top-2 right-2 z-10 text-gray-300 hover:text-gray-900"
+                        class="absolute inset-0"
+                        aria-label={repo.name}
+                      />
+                    )}
+                    {repo.isPrivate ? (
+                      <span
+                        title="Private repository"
+                        class="absolute top-2 right-2 z-10 text-gray-300"
                       >
-                        <GitHubMark />
-                      </a>
+                        <LockMark />
+                      </span>
+                    ) : (
+                      repo.homepage && (
+                        <a
+                          href={repo.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`${repo.name} on GitHub`}
+                          title="GitHub"
+                          class="absolute top-2 right-2 z-10 text-gray-300 hover:text-gray-900"
+                        >
+                          <GitHubMark />
+                        </a>
+                      )
                     )}
                   </div>
                 ))}
