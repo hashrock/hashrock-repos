@@ -1,6 +1,7 @@
 import { useState } from "hono/jsx";
 import TagEditor from "./tag-editor";
 import { apiFetch } from "../lib/api-fetch";
+import { toStandaloneSvg } from "../lib/svg";
 
 interface Repo {
   id: number;
@@ -317,7 +318,8 @@ export default function RepoEditor({ repo }: Props) {
         {coverImageKey ? (
           <div class="space-y-2">
             <img
-              src={`/images/${coverImageKey}`}
+              // 公開側は hide 中に 404 になるので、管理画面は Access 配下から取る
+              src={`/admin/api/repos/${repo.id}/image?v=${encodeURIComponent(coverImageKey)}`}
               alt=""
               class="max-h-64 rounded border"
             />
@@ -364,9 +366,12 @@ export default function RepoEditor({ repo }: Props) {
         <div class="flex items-start gap-4">
           <div class="w-16 h-16 shrink-0 border rounded flex items-center justify-center bg-gray-50 overflow-hidden">
             {savedLogoSvg ? (
-              <span
-                class="block w-10 h-10 [&>svg]:w-full [&>svg]:h-full"
-                dangerouslySetInnerHTML={{ __html: savedLogoSvg }}
+              // data: URI の <img> で描画する。インライン展開すると管理画面の
+              // オリジンで貼り付けた SVG が動いてしまうため
+              <img
+                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(toStandaloneSvg(savedLogoSvg))}`}
+                alt=""
+                class="block w-10 h-10"
               />
             ) : (
               <span class="text-xs text-gray-400">なし</span>

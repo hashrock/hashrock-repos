@@ -105,9 +105,13 @@ export default createRoute(async (c) => {
                 <div class="p-4 flex-1">
                   <div class="flex items-center gap-2">
                     {repo.logoSvg && (
-                      <span
-                        class="block w-6 h-6 shrink-0 [&>svg]:w-full [&>svg]:h-full"
-                        dangerouslySetInnerHTML={{ __html: repo.logoSvg }}
+                      <img
+                        src={`/logos/${repo.id}`}
+                        alt=""
+                        width={24}
+                        height={24}
+                        loading="lazy"
+                        class="block w-6 h-6 shrink-0"
                       />
                     )}
                     <span class="font-semibold text-gray-900">{repo.name}</span>
@@ -209,9 +213,13 @@ export default createRoute(async (c) => {
                   >
                     <div class={`flex items-center gap-1.5 ${signedIn ? 'pr-12' : 'pr-6'}`}>
                       {repo.logoSvg && (
-                        <span
-                          class="block w-4 h-4 shrink-0 [&>svg]:w-full [&>svg]:h-full"
-                          dangerouslySetInnerHTML={{ __html: repo.logoSvg }}
+                        <img
+                          src={`/logos/${repo.id}`}
+                          alt=""
+                          width={16}
+                          height={16}
+                          loading="lazy"
+                          class="block w-4 h-4 shrink-0"
                         />
                       )}
                       <span class="font-medium text-sm text-gray-900">{repo.name}</span>

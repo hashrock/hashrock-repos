@@ -1,6 +1,7 @@
 import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
 import { and, eq, inArray } from "drizzle-orm";
 import { repositories, tags, repositoryTags } from "../db/schema";
+import { KANBAN_COLUMNS } from "./constants";
 import type { GitHubRepo } from "./github";
 
 function getDb(d1: D1Database) {
@@ -238,6 +239,73 @@ export async function listRepos(
 export async function getRepoById(d1: D1Database, repoId: number) {
   const db = getDb(d1);
   return db.select().from(repositories).where(eq(repositories.id, repoId)).get();
+}
+
+/**
+ * そのリポジトリが公開トップページに出ている状態か。
+ *
+ * ロゴとカバー画像の配信可否をこれで判定する。判定を持たずに R2 や DB を
+ * そのまま引くと、hide や star 解除をしても URL を知っている相手には
+ * 取り続けられてしまう (公開の取り消しが効かない)。
+ *
+ * 条件はトップページの描画条件と同じ:
+ *   hide でなく archived でもなく、star が付いているか kanban タグがある
+ */
+async function findVisibleRepo(
+  d1: D1Database,
+  where: ReturnType<typeof eq>
+) {
+  const db = getDb(d1);
+
+  const repo = await db
+    .select()
+    .from(repositories)
+    .where(
+      and(
+        where,
+        eq(repositories.hide, false),
+        eq(repositories.archived, false)
+      )
+    )
+    .get();
+
+  if (!repo) {
+    return undefined;
+  }
+
+  if (repo.star) {
+    return repo;
+  }
+
+  // star が無い場合は kanban タグが付いていれば公開されている
+  const tagged = await db
+    .select({ tagName: tags.name })
+    .from(repositoryTags)
+    .innerJoin(tags, eq(repositoryTags.tagId, tags.id))
+    .where(eq(repositoryTags.repositoryId, repo.id))
+    .all();
+
+  const isOnBoard = tagged.some((t) =>
+    (KANBAN_COLUMNS as readonly string[]).includes(t.tagName)
+  );
+
+  return isOnBoard ? repo : undefined;
+}
+
+/** 公開配信してよいリポジトリを id で引く。出ていなければ undefined */
+export async function getPubliclyVisibleRepoById(
+  d1: D1Database,
+  repoId: number
+) {
+  return findVisibleRepo(d1, eq(repositories.id, repoId));
+}
+
+/** 公開配信してよいリポジトリをカバー画像のキーで引く */
+export async function getPubliclyVisibleRepoByCoverImageKey(
+  d1: D1Database,
+  key: string
+) {
+  return findVisibleRepo(d1, eq(repositories.coverImageKey, key));
 }
 
 /** 個別編集ページ用。タグ付きで 1 件返す */

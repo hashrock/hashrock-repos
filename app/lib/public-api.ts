@@ -14,7 +14,8 @@ export interface PublicRepo {
   isPrivate: boolean;
   /** カバー画像の絶対 URL */
   image: string | null;
-  logoSvg: string | null;
+  /** ロゴ SVG の絶対 URL。<img> で参照すること */
+  logo: string | null;
   updatedAt: string;
 }
 
@@ -59,7 +60,9 @@ export function toPublicRepo(repo: RepoRow, origin: string): PublicRepo {
     tags: repo.tags,
     isPrivate,
     image: repo.coverImageKey ? `${origin}/images/${repo.coverImageKey}` : null,
-    logoSvg: repo.logoSvg,
+    // 生の SVG は返さない。受け取った CMS がそのままインライン展開すると
+    // 貼り付けた内容がその CMS のオリジンで動いてしまうため、URL で渡す
+    logo: repo.logoSvg ? `${origin}/logos/${repo.id}` : null,
     updatedAt: repo.updatedAt,
   };
 }
