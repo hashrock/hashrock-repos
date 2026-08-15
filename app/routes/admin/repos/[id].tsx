@@ -1,6 +1,7 @@
 import { createRoute } from "honox/factory";
 import { getRepoWithTags } from "../../../lib/db";
 import RepoEditor from "../../../islands/repo-editor";
+import AdminNav from "../../../components/admin-nav";
 
 export default createRoute(async (c) => {
   const id = Number(c.req.param("id"));
@@ -16,12 +17,12 @@ export default createRoute(async (c) => {
   return c.render(
     <div class="py-8 px-6 max-w-3xl mx-auto">
       <title>{repo.fullName}</title>
-      <a
-        href="/admin/repos"
-        class="text-sm text-gray-500 hover:text-gray-800 hover:underline"
-      >
-        ← Repositories
-      </a>
+      <AdminNav
+        crumbs={[
+          { href: "/admin", label: "Admin" },
+          { href: "/admin/repos", label: "Repositories" },
+        ]}
+      />
       <RepoEditor repo={repo} />
     </div>
   );

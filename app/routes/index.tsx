@@ -33,6 +33,23 @@ function cardHref(repo: {
   return repo.homepage || repo.url
 }
 
+function PencilMark() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true">
+      <path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm1.414 1.06a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354l-1.086-1.086ZM11.189 6.25 9.75 4.81l-6.286 6.287a.25.25 0 0 0-.064.108l-.558 1.953 1.953-.558a.25.25 0 0 0 .108-.064L11.189 6.25Z" />
+    </svg>
+  )
+}
+
+/**
+ * CF Access のセッション Cookie があるか。トップページは Access の外なので
+ * これは「管理者本人らしい」という UI 上のヒントでしかない。表示を出し分ける
+ * のは /admin へのリンクだけで、非公開データの出し分けには使わないこと。
+ */
+function hasAccessSession(cookieHeader: string | undefined): boolean {
+  return /(?:^|;\s*)CF_Authorization=/.test(cookieHeader ?? '')
+}
+
 export default createRoute(async (c) => {
   // カンバンは private も含める。ただし列に並ぶのは backlog/ongoing などの
   // タグが付いたものだけなので、タグの無い private は結局どこにも出ない。
@@ -43,6 +60,8 @@ export default createRoute(async (c) => {
     includePrivate: true,
     starredOnly: true,
   })
+
+  const signedIn = hasAccessSession(c.req.header('cookie'))
 
   const columns = KANBAN_COLUMNS.map((col) => ({
     name: col,
@@ -122,28 +141,40 @@ export default createRoute(async (c) => {
                     aria-label={repo.name}
                   />
                 )}
-                {/* private は鍵、public はリポジトリへの導線。オーバーレイより前面 */}
-                {repo.isPrivate ? (
-                  <span
-                    title="Private repository"
-                    class="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-white/90 text-gray-400 shadow-sm"
-                  >
-                    <LockMark />
-                  </span>
-                ) : (
-                  repo.homepage && (
+                {/* オーバーレイより前面に置くアイコン群 */}
+                <div class="absolute top-2 right-2 z-10 flex items-center gap-1">
+                  {signedIn && (
                     <a
-                      href={repo.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`${repo.name} on GitHub`}
-                      title="GitHub"
-                      class="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-white/90 text-gray-400 hover:text-gray-900 shadow-sm"
+                      href={`/admin/repos/${repo.id}`}
+                      aria-label={`${repo.name} を編集`}
+                      title="編集"
+                      class="p-1.5 rounded-full bg-white/90 text-gray-400 hover:text-blue-600 shadow-sm"
                     >
-                      <GitHubMark />
+                      <PencilMark />
                     </a>
-                  )
-                )}
+                  )}
+                  {repo.isPrivate ? (
+                    <span
+                      title="Private repository"
+                      class="p-1.5 rounded-full bg-white/90 text-gray-400 shadow-sm"
+                    >
+                      <LockMark />
+                    </span>
+                  ) : (
+                    repo.homepage && (
+                      <a
+                        href={repo.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`${repo.name} on GitHub`}
+                        title="GitHub"
+                        class="p-1.5 rounded-full bg-white/90 text-gray-400 hover:text-gray-900 shadow-sm"
+                      >
+                        <GitHubMark />
+                      </a>
+                    )
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -169,7 +200,7 @@ export default createRoute(async (c) => {
                     key={repo.id}
                     class="relative p-3 bg-white rounded border border-gray-100 shadow-sm hover:shadow transition-shadow"
                   >
-                    <div class="flex items-center gap-1.5 pr-6">
+                    <div class={`flex items-center gap-1.5 ${signedIn ? 'pr-12' : 'pr-6'}`}>
                       {repo.logoSvg && (
                         <span
                           class="block w-4 h-4 shrink-0 [&>svg]:w-full [&>svg]:h-full"
@@ -212,27 +243,36 @@ export default createRoute(async (c) => {
                         aria-label={repo.name}
                       />
                     )}
-                    {repo.isPrivate ? (
-                      <span
-                        title="Private repository"
-                        class="absolute top-2 right-2 z-10 text-gray-300"
-                      >
-                        <LockMark />
-                      </span>
-                    ) : (
-                      repo.homepage && (
+                    <div class="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+                      {signedIn && (
                         <a
-                          href={repo.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label={`${repo.name} on GitHub`}
-                          title="GitHub"
-                          class="absolute top-2 right-2 z-10 text-gray-300 hover:text-gray-900"
+                          href={`/admin/repos/${repo.id}`}
+                          aria-label={`${repo.name} を編集`}
+                          title="編集"
+                          class="text-gray-300 hover:text-blue-600"
                         >
-                          <GitHubMark />
+                          <PencilMark />
                         </a>
-                      )
-                    )}
+                      )}
+                      {repo.isPrivate ? (
+                        <span title="Private repository" class="text-gray-300">
+                          <LockMark />
+                        </span>
+                      ) : (
+                        repo.homepage && (
+                          <a
+                            href={repo.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`${repo.name} on GitHub`}
+                            title="GitHub"
+                            class="text-gray-300 hover:text-gray-900"
+                          >
+                            <GitHubMark />
+                          </a>
+                        )
+                      )}
+                    </div>
                   </div>
                 ))}
                 {col.repos.length === 0 && (
