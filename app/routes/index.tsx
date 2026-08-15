@@ -33,7 +33,7 @@ export default createRoute(async (c) => {
   }
 
   return c.render(
-    <div class="py-6 px-4 sm:py-8 sm:px-6">
+    <div class="py-6 px-4 sm:py-8 sm:px-6 max-w-[1440px] mx-auto">
       <title>hashrock repos</title>
       {starred.length > 0 && (
         <div class="mb-10">
