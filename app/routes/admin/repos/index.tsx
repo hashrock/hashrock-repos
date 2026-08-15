@@ -1,10 +1,13 @@
 import { createRoute } from "honox/factory";
-import { listRepos } from "../../lib/db";
-import SyncButton from "../../islands/sync-button";
-import RepoList from "../../islands/repo-list";
+import { listRepos } from "../../../lib/db";
+import SyncButton from "../../../islands/sync-button";
+import RepoList from "../../../islands/repo-list";
 
 export default createRoute(async (c) => {
-  const repos = await listRepos(c.env.DB, { includePrivate: true });
+  const repos = await listRepos(c.env.DB, {
+    includePrivate: true,
+    includeHidden: true,
+  });
 
   return c.render(
     <div class="py-8 px-6 max-w-6xl mx-auto">

@@ -3,7 +3,13 @@ import { listRepos } from '../lib/db'
 import { KANBAN_COLUMNS } from '../lib/constants'
 
 export default createRoute(async (c) => {
+  // カンバンは public のみ。star したものは「公開してよい」の意思表示として
+  // private でもカードに出す (hide が立っていれば両方から外れる)
   const allRepos = await listRepos(c.env.DB)
+  const starred = await listRepos(c.env.DB, {
+    includePrivate: true,
+    starredOnly: true,
+  })
 
   const columns = KANBAN_COLUMNS.map((col) => ({
     name: col,
@@ -20,6 +26,55 @@ export default createRoute(async (c) => {
   return c.render(
     <div class="py-6 px-4 sm:py-8 sm:px-6">
       <title>hashrock repos</title>
+      {starred.length > 0 && (
+        <div class="mb-10">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {starred.map((repo) => (
+              <a
+                key={repo.id}
+                href={repo.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+              >
+                {repo.coverImageKey && (
+                  <img
+                    src={`/images/${repo.coverImageKey}`}
+                    alt=""
+                    loading="lazy"
+                    class="w-full aspect-video object-cover bg-gray-100"
+                  />
+                )}
+                <div class="p-4 flex-1">
+                  <div class="font-semibold text-gray-900">{repo.name}</div>
+                  {repo.description && (
+                    <div class="text-sm text-gray-500 mt-1">
+                      {repo.description}
+                    </div>
+                  )}
+                  {repo.notes && (
+                    <div class="text-xs text-gray-600 mt-3 whitespace-pre-wrap border-t border-gray-100 pt-3">
+                      {repo.notes}
+                    </div>
+                  )}
+                  {repo.tags.filter((t) => !(KANBAN_COLUMNS as readonly string[]).includes(t)).length > 0 && (
+                    <div class="flex gap-1 mt-3 flex-wrap">
+                      {repo.tags
+                        .filter((t) => !(KANBAN_COLUMNS as readonly string[]).includes(t))
+                        .map((tag) => (
+                          <span key={tag} class="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full">
+                            {tag}
+                          </span>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div class="mb-6">
         <h1 class="text-2xl sm:text-3xl font-bold">Projects</h1>
       </div>

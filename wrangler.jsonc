@@ -18,6 +18,12 @@
 	"assets": {
 		"directory": "./dist"
 	},
+	"r2_buckets": [
+		{
+			"binding": "IMAGES",
+			"bucket_name": "hashrock-repos-images"
+		}
+	],
 	"d1_databases": [
 		{
 			"binding": "DB",

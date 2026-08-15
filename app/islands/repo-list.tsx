@@ -14,6 +14,8 @@ interface Repo {
   archived: boolean | null;
   isPrivate: boolean | null;
   createdAt: string | null;
+  star: boolean | null;
+  hide: boolean | null;
   tags: string[];
 }
 
@@ -242,6 +244,16 @@ export default function RepoList({ repos: initialRepos }: Props) {
                         Private
                       </span>
                     )}
+                    {repo.star && (
+                      <span class="ml-2 align-middle text-xs px-2 py-0.5 border border-yellow-400 bg-yellow-50 text-yellow-700 rounded-full">
+                        ★ Star
+                      </span>
+                    )}
+                    {repo.hide && (
+                      <span class="ml-2 align-middle text-xs px-2 py-0.5 border border-gray-300 bg-gray-100 text-gray-500 rounded-full">
+                        Hidden
+                      </span>
+                    )}
                     {repo.description && (
                       <p class="text-gray-600 mt-1">{repo.description}</p>
                     )}
@@ -263,8 +275,16 @@ export default function RepoList({ repos: initialRepos }: Props) {
                   onTagsChange={onTagsChange}
                 />
                 <div class="flex items-center justify-between mt-2">
-                  <div class="text-xs text-gray-400">
-                    Updated: {new Date(repo.updatedAt).toLocaleDateString()}
+                  <div class="flex items-center gap-3">
+                    <div class="text-xs text-gray-400">
+                      Updated: {new Date(repo.updatedAt).toLocaleDateString()}
+                    </div>
+                    <a
+                      href={`/admin/repos/${repo.id}`}
+                      class="text-xs text-blue-600 hover:underline"
+                    >
+                      Edit
+                    </a>
                   </div>
                   {repo.archived ? (
                     <span class="text-xs px-2 py-0.5 bg-gray-200 text-gray-500 rounded">

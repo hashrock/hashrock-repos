@@ -1,5 +1,5 @@
 import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { repositories, tags, repositoryTags } from "../db/schema";
 import type { GitHubRepo } from "./github";
 
@@ -114,6 +114,10 @@ export interface ListReposOptions {
    * 明示的に指定されない限り含めない。
    */
   includePrivate?: boolean;
+  /** hide が立っているリポジトリを含めるか。管理画面でのみ true にする */
+  includeHidden?: boolean;
+  /** star が立っているリポジトリだけに絞るか */
+  starredOnly?: boolean;
 }
 
 export async function listRepos(
@@ -122,10 +126,21 @@ export async function listRepos(
 ) {
   const db = getDb(d1);
 
+  const conditions = [];
+  if (!options.includePrivate) {
+    conditions.push(eq(repositories.isPrivate, false));
+  }
+  if (!options.includeHidden) {
+    conditions.push(eq(repositories.hide, false));
+  }
+  if (options.starredOnly) {
+    conditions.push(eq(repositories.star, true));
+  }
+
   const query = db.select().from(repositories);
-  const allRepos = await (options.includePrivate
-    ? query
-    : query.where(eq(repositories.isPrivate, false))
+  const allRepos = await (conditions.length > 0
+    ? query.where(and(...conditions))
+    : query
   ).all();
 
   if (allRepos.length === 0) {
@@ -162,6 +177,75 @@ export async function listRepos(
 export async function getRepoById(d1: D1Database, repoId: number) {
   const db = getDb(d1);
   return db.select().from(repositories).where(eq(repositories.id, repoId)).get();
+}
+
+/** 個別編集ページ用。タグ付きで 1 件返す */
+export async function getRepoWithTags(d1: D1Database, repoId: number) {
+  const db = getDb(d1);
+
+  const repo = await db
+    .select()
+    .from(repositories)
+    .where(eq(repositories.id, repoId))
+    .get();
+
+  if (!repo) {
+    return undefined;
+  }
+
+  const rows = await db
+    .select({ tagName: tags.name })
+    .from(repositoryTags)
+    .innerJoin(tags, eq(repositoryTags.tagId, tags.id))
+    .where(eq(repositoryTags.repositoryId, repoId))
+    .all();
+
+  return { ...repo, tags: rows.map((r) => r.tagName) };
+}
+
+export interface RepoMetaPatch {
+  notes?: string | null;
+  star?: boolean;
+  hide?: boolean;
+}
+
+/**
+ * 手で編集する項目だけを更新する。GitHub 由来の項目は sync が上書きするので
+ * ここでは触らない。
+ */
+export async function updateRepoMeta(
+  d1: D1Database,
+  repoId: number,
+  patch: RepoMetaPatch
+) {
+  const db = getDb(d1);
+
+  const values: RepoMetaPatch = {};
+  if (patch.notes !== undefined) values.notes = patch.notes;
+  if (patch.star !== undefined) values.star = patch.star;
+  if (patch.hide !== undefined) values.hide = patch.hide;
+
+  if (Object.keys(values).length > 0) {
+    await db
+      .update(repositories)
+      .set(values)
+      .where(eq(repositories.id, repoId));
+  }
+
+  return getRepoById(d1, repoId);
+}
+
+export async function setRepoCoverImageKey(
+  d1: D1Database,
+  repoId: number,
+  key: string | null
+) {
+  const db = getDb(d1);
+  await db
+    .update(repositories)
+    .set({ coverImageKey: key })
+    .where(eq(repositories.id, repoId));
+  return { repoId, coverImageKey: key };
 }
 
 export async function updateRepoTags(

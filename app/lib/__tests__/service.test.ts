@@ -81,6 +81,10 @@ describe("updateRepoTagsWithSync", () => {
       archived: false,
       isPrivate: false,
       createdAt: "2024-01-01",
+      notes: null,
+      star: false,
+      hide: false,
+      coverImageKey: null,
     });
     vi.mocked(updateRepoTopics).mockResolvedValue(undefined);
 
@@ -118,6 +122,10 @@ describe("updateRepoTagsWithSync", () => {
       archived: false,
       isPrivate: false,
       createdAt: "2024-01-01",
+      notes: null,
+      star: false,
+      hide: false,
+      coverImageKey: null,
     });
     vi.mocked(updateRepoTopics).mockRejectedValue(new Error("API error"));
 
@@ -142,6 +150,10 @@ describe("archiveRepoWithSync", () => {
       archived: false,
       isPrivate: false,
       createdAt: "2024-01-01",
+      notes: null,
+      star: false,
+      hide: false,
+      coverImageKey: null,
     });
     vi.mocked(archiveRepo).mockResolvedValue(undefined);
 
@@ -179,6 +191,10 @@ describe("archiveRepoWithSync", () => {
       archived: false,
       isPrivate: false,
       createdAt: "2024-01-01",
+      notes: null,
+      star: false,
+      hide: false,
+      coverImageKey: null,
     });
     vi.mocked(archiveRepo).mockRejectedValue(new Error("API error"));
 
@@ -206,6 +222,10 @@ describe("bulkAddTagsWithSync", () => {
         archived: false,
         isPrivate: false,
         createdAt: "2024-01-01",
+        notes: null,
+        star: false,
+        hide: false,
+        coverImageKey: null,
       })
       .mockResolvedValueOnce({
         id: 2,
@@ -219,6 +239,10 @@ describe("bulkAddTagsWithSync", () => {
         archived: false,
         isPrivate: false,
         createdAt: "2024-01-01",
+        notes: null,
+        star: false,
+        hide: false,
+        coverImageKey: null,
       });
     vi.mocked(updateRepoTopics).mockResolvedValue(undefined);
 
@@ -248,6 +272,10 @@ describe("bulkAddTagsWithSync", () => {
       archived: false,
       isPrivate: false,
       createdAt: "2024-01-01",
+      notes: null,
+      star: false,
+      hide: false,
+      coverImageKey: null,
     });
     vi.mocked(updateRepoTopics).mockRejectedValue(new Error("API error"));
 

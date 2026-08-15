@@ -12,6 +12,14 @@ export const repositories = sqliteTable("repositories", {
   archived: integer("archived", { mode: "boolean" }).default(false),
   isPrivate: integer("is_private", { mode: "boolean" }).default(false),
   createdAt: text("created_at"),
+  // 手書きのメモ。star したリポジトリは公開カードにも表示される
+  notes: text("notes"),
+  // star = 「公開トップに大きく出してよい」の意思表示。private でも出る
+  star: integer("star", { mode: "boolean" }).default(false),
+  // hide = 公開トップから完全に外す。star より強い
+  hide: integer("hide", { mode: "boolean" }).default(false),
+  // R2 のオブジェクトキー。/images/{key} で配信する
+  coverImageKey: text("cover_image_key"),
 });
 
 export const tags = sqliteTable("tags", {

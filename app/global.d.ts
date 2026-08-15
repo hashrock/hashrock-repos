@@ -5,6 +5,7 @@ declare module 'hono' {
     Variables: {}
     Bindings: {
       DB: D1Database
+      IMAGES: R2Bucket
       GITHUB_TOKEN: string
     }
   }
