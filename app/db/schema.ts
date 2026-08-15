@@ -10,6 +10,7 @@ export const repositories = sqliteTable("repositories", {
   language: text("language"),
   starCount: integer("star_count").default(0),
   archived: integer("archived", { mode: "boolean" }).default(false),
+  isPrivate: integer("is_private", { mode: "boolean" }).default(false),
   createdAt: text("created_at"),
 });
 

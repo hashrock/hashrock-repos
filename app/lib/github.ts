@@ -9,6 +9,7 @@ export interface GitHubRepo {
   archived: boolean;
   created_at: string;
   topics: string[];
+  private: boolean;
 }
 
 async function fetchAllPages(
@@ -43,10 +44,38 @@ async function fetchAllPages(
   return results;
 }
 
+async function fetchAuthenticatedLogin(token: string): Promise<string | null> {
+  const res = await fetch("https://api.github.com/user", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "hashrock-repos",
+    },
+  });
+
+  if (!res.ok) {
+    return null;
+  }
+
+  const data: { login: string } = await res.json();
+  return data.login;
+}
+
 export async function fetchUserRepos(
   token: string,
   username: string
 ): Promise<GitHubRepo[]> {
+  // /users/{username}/repos は token があっても public リポジトリしか返さない。
+  // token の持ち主自身を同期する場合だけ /user/repos を使い private も取得する。
+  const login = await fetchAuthenticatedLogin(token);
+
+  if (login === username) {
+    return fetchAllPages(
+      "https://api.github.com/user/repos?affiliation=owner&visibility=all",
+      token
+    );
+  }
+
   return fetchAllPages(
     `https://api.github.com/users/${username}/repos?type=owner`,
     token

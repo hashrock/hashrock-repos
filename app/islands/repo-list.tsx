@@ -11,6 +11,7 @@ interface Repo {
   language: string | null;
   starCount: number | null;
   archived: boolean | null;
+  isPrivate: boolean | null;
   createdAt: string | null;
   tags: string[];
 }
@@ -235,6 +236,11 @@ export default function RepoList({ repos: initialRepos }: Props) {
                     >
                       {repo.fullName}
                     </a>
+                    {repo.isPrivate && (
+                      <span class="ml-2 align-middle text-xs px-2 py-0.5 border border-amber-300 bg-amber-50 text-amber-700 rounded-full">
+                        Private
+                      </span>
+                    )}
                     {repo.description && (
                       <p class="text-gray-600 mt-1">{repo.description}</p>
                     )}

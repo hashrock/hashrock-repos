@@ -70,6 +70,7 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
           language: repo.language,
           starCount: repo.stargazers_count,
           archived: repo.archived,
+          isPrivate: repo.private,
           createdAt: repo.created_at,
         })
         .where(eq(repositories.fullName, repo.full_name));
@@ -86,6 +87,7 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
           language: repo.language,
           starCount: repo.stargazers_count,
           archived: repo.archived,
+          isPrivate: repo.private,
           createdAt: repo.created_at,
         })
         .returning()
@@ -106,10 +108,25 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
   return { synced: repos.length };
 }
 
-export async function listRepos(d1: D1Database) {
+export interface ListReposOptions {
+  /**
+   * private リポジトリを含めるか。トップページは未認証で見られるため、
+   * 明示的に指定されない限り含めない。
+   */
+  includePrivate?: boolean;
+}
+
+export async function listRepos(
+  d1: D1Database,
+  options: ListReposOptions = {}
+) {
   const db = getDb(d1);
 
-  const allRepos = await db.select().from(repositories).all();
+  const query = db.select().from(repositories);
+  const allRepos = await (options.includePrivate
+    ? query
+    : query.where(eq(repositories.isPrivate, false))
+  ).all();
 
   if (allRepos.length === 0) {
     return [];

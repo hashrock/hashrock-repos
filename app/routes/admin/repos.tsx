@@ -4,7 +4,7 @@ import SyncButton from "../../islands/sync-button";
 import RepoList from "../../islands/repo-list";
 
 export default createRoute(async (c) => {
-  const repos = await listRepos(c.env.DB);
+  const repos = await listRepos(c.env.DB, { includePrivate: true });
 
   return c.render(
     <div class="py-8 px-6 max-w-6xl mx-auto">

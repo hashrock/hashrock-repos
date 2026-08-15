@@ -53,6 +53,7 @@ describe("syncReposFromGitHub", () => {
       archived: false,
       created_at: "2024-01-01",
       topics: [],
+      private: false,
     }];
     vi.mocked(fetchUserRepos).mockResolvedValue(mockRepos);
     vi.mocked(syncRepos).mockResolvedValue({ synced: 1 });
@@ -78,6 +79,7 @@ describe("updateRepoTagsWithSync", () => {
       language: null,
       starCount: 0,
       archived: false,
+      isPrivate: false,
       createdAt: "2024-01-01",
     });
     vi.mocked(updateRepoTopics).mockResolvedValue(undefined);
@@ -114,6 +116,7 @@ describe("updateRepoTagsWithSync", () => {
       language: null,
       starCount: 0,
       archived: false,
+      isPrivate: false,
       createdAt: "2024-01-01",
     });
     vi.mocked(updateRepoTopics).mockRejectedValue(new Error("API error"));
@@ -137,6 +140,7 @@ describe("archiveRepoWithSync", () => {
       language: null,
       starCount: 0,
       archived: false,
+      isPrivate: false,
       createdAt: "2024-01-01",
     });
     vi.mocked(archiveRepo).mockResolvedValue(undefined);
@@ -173,6 +177,7 @@ describe("archiveRepoWithSync", () => {
       language: null,
       starCount: 0,
       archived: false,
+      isPrivate: false,
       createdAt: "2024-01-01",
     });
     vi.mocked(archiveRepo).mockRejectedValue(new Error("API error"));
@@ -199,6 +204,7 @@ describe("bulkAddTagsWithSync", () => {
         language: null,
         starCount: 0,
         archived: false,
+        isPrivate: false,
         createdAt: "2024-01-01",
       })
       .mockResolvedValueOnce({
@@ -211,6 +217,7 @@ describe("bulkAddTagsWithSync", () => {
         language: null,
         starCount: 0,
         archived: false,
+        isPrivate: false,
         createdAt: "2024-01-01",
       });
     vi.mocked(updateRepoTopics).mockResolvedValue(undefined);
@@ -239,6 +246,7 @@ describe("bulkAddTagsWithSync", () => {
       language: null,
       starCount: 0,
       archived: false,
+      isPrivate: false,
       createdAt: "2024-01-01",
     });
     vi.mocked(updateRepoTopics).mockRejectedValue(new Error("API error"));
