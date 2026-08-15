@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f3654914-1905-4feb-a912-529905d88904",
-  "prevId": "5b9c11cc-7e2f-4d45-b830-51787643d817",
+  "id": "de34b9cf-6d20-45b9-9beb-1cbcb55904e8",
+  "prevId": "f3654914-1905-4feb-a912-529905d88904",
   "tables": {
     "repositories": {
       "name": "repositories",
@@ -89,6 +89,36 @@
         },
         "created_at": {
           "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "star": {
+          "name": "star",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": false
+        },
+        "hide": {
+          "name": "hide",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": false
+        },
+        "cover_image_key": {
+          "name": "cover_image_key",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

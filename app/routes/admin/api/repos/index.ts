@@ -1,6 +1,6 @@
 import { createRoute } from "honox/factory";
-import { listRepos } from "../../../lib/db";
-import { syncReposFromGitHub } from "../../../lib/service";
+import { listRepos } from "../../../../lib/db";
+import { syncReposFromGitHub } from "../../../../lib/service";
 
 // /api は CF Access で保護されているため private も返す
 export const GET = createRoute(async (c) => {

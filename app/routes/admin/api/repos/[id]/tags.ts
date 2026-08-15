@@ -1,5 +1,5 @@
 import { createRoute } from "honox/factory";
-import { updateRepoTagsWithSync } from "../../../../lib/service";
+import { updateRepoTagsWithSync } from "../../../../../lib/service";
 
 export const PUT = createRoute(async (c) => {
   const id = Number(c.req.param("id"));

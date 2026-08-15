@@ -20,7 +20,7 @@ export async function syncReposFromGitHub(
   d1: D1Database,
   token: string,
   username: string
-): Promise<ServiceResult<{ synced: number }>> {
+): Promise<ServiceResult<{ synced: number; deleted: number }>> {
   const repos = await fetchUserRepos(token, username);
   const data = await syncRepos(d1, repos);
   return { data };

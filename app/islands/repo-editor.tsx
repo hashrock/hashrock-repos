@@ -43,7 +43,7 @@ export default function RepoEditor({ repo }: Props) {
   }) => {
     setSaveState("saving");
     try {
-      const res = await apiFetch(`/api/repos/${repo.id}`, {
+      const res = await apiFetch(`/admin/api/repos/${repo.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -76,7 +76,7 @@ export default function RepoEditor({ repo }: Props) {
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await apiFetch(`/api/repos/${repo.id}/image`, {
+      const res = await apiFetch(`/admin/api/repos/${repo.id}/image`, {
         method: "POST",
         body: form,
       });
@@ -101,7 +101,7 @@ export default function RepoEditor({ repo }: Props) {
     setUploading(true);
     setUploadError("");
     try {
-      const res = await apiFetch(`/api/repos/${repo.id}/image`, {
+      const res = await apiFetch(`/admin/api/repos/${repo.id}/image`, {
         method: "DELETE",
       });
       if (res.ok) {

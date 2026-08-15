@@ -1,5 +1,5 @@
 import { createRoute } from "honox/factory";
-import { archiveRepoWithSync } from "../../../../lib/service";
+import { archiveRepoWithSync } from "../../../../../lib/service";
 
 export const POST = createRoute(async (c) => {
   const id = Number(c.req.param("id"));

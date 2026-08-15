@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f3654914-1905-4feb-a912-529905d88904",
+  "id": "5b9c11cc-7e2f-4d45-b830-51787643d817",
   "prevId": "fc5e88f0-01f4-491c-ad5d-b26876091daa",
   "tables": {
     "repositories": {
@@ -13,6 +13,13 @@
           "primaryKey": true,
           "notNull": true,
           "autoincrement": true
+        },
+        "github_id": {
+          "name": "github_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "name": {
           "name": "name",
@@ -72,14 +79,6 @@
           "autoincrement": false,
           "default": false
         },
-        "is_private": {
-          "name": "is_private",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false,
-          "default": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -89,6 +88,13 @@
         }
       },
       "indexes": {
+        "repositories_github_id_unique": {
+          "name": "repositories_github_id_unique",
+          "columns": [
+            "github_id"
+          ],
+          "isUnique": true
+        },
         "repositories_full_name_unique": {
           "name": "repositories_full_name_unique",
           "columns": [

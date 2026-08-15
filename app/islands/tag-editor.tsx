@@ -15,9 +15,10 @@ export default function TagEditor({ repoId, initialTags, onTagsChange }: Props) 
   const saveTags = async (newTags: string[]) => {
     setSaving(true);
     try {
-      await apiFetch(`/api/repos/${repoId}/tags`, {
+      await apiFetch(`/admin/api/repos/${repoId}/tags`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ tags: newTags }),
       });
     } finally {

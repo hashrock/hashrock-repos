@@ -26,6 +26,7 @@ function makeBucket() {
 function repoRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 1,
+    githubId: 1001,
     name: "repo",
     fullName: "user/repo",
     url: "https://github.com/user/repo",

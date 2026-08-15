@@ -1,5 +1,5 @@
 import { createRoute } from "honox/factory";
-import { getRepoWithTags, updateRepoMeta } from "../../../../lib/db";
+import { getRepoWithTags, updateRepoMeta } from "../../../../../lib/db";
 
 export const GET = createRoute(async (c) => {
   const id = Number(c.req.param("id"));

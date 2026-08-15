@@ -9,14 +9,20 @@ export default function SyncButton() {
     setLoading(true);
     setMessage("");
     try {
-      const res = await apiFetch("/api/repos", {
+      const res = await apiFetch("/admin/api/repos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ username: "hashrock" }),
       });
-      const data = (await res.json()) as { synced?: number; error?: string };
+      const data = (await res.json()) as {
+        synced?: number;
+        deleted?: number;
+        error?: string;
+      };
       if (res.ok) {
-        setMessage(`Synced ${data.synced} repositories`);
+        const deletedPart = data.deleted ? `, deleted ${data.deleted}` : "";
+        setMessage(`Synced ${data.synced} repositories${deletedPart}`);
         setTimeout(() => location.reload(), 1000);
       } else {
         setMessage(`Error: ${data.error}`);

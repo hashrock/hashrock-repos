@@ -3,7 +3,7 @@ import {
   ImageValidationError,
   deleteCoverImage,
   putCoverImage,
-} from "../../../../lib/images";
+} from "../../../../../lib/images";
 
 export const POST = createRoute(async (c) => {
   const id = Number(c.req.param("id"));

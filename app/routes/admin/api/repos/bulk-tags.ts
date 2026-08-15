@@ -1,5 +1,5 @@
 import { createRoute } from "honox/factory";
-import { bulkAddTagsWithSync } from "../../../lib/service";
+import { bulkAddTagsWithSync } from "../../../../lib/service";
 
 export const POST = createRoute(async (c) => {
   const { repoIds, tags } = await c.req.json<{
