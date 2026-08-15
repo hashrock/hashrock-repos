@@ -6,6 +6,15 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	// hashrock.info ゾーン上のカスタムドメイン。DNS レコードは wrangler が作成する。
+	"routes": [
+		{
+			"pattern": "repos.hashrock.info",
+			"custom_domain": true
+		}
+	],
+	// カスタムドメインへ移行済みのため workers.dev は無効化
+	"workers_dev": false,
 	"assets": {
 		"directory": "./dist"
 	},

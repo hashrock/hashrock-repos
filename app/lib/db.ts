@@ -1,5 +1,5 @@
 import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { repositories, tags, repositoryTags } from "../db/schema";
 import type { GitHubRepo } from "./github";
 
@@ -115,8 +115,8 @@ export async function listRepos(d1: D1Database) {
     return [];
   }
 
-  const repoIds = allRepos.map((r) => r.id);
-
+  // 全リポジトリ分のタグをまとめて取得する。repositoryId で絞ると D1 の
+  // バインドパラメータ上限 (100) を超えてクエリが失敗するため WHERE は付けない。
   const allRepoTags = await db
     .select({
       repositoryId: repositoryTags.repositoryId,
@@ -124,7 +124,6 @@ export async function listRepos(d1: D1Database) {
     })
     .from(repositoryTags)
     .innerJoin(tags, eq(repositoryTags.tagId, tags.id))
-    .where(inArray(repositoryTags.repositoryId, repoIds))
     .all();
 
   const tagsByRepoId = new Map<number, string[]>();
