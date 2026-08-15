@@ -227,6 +227,11 @@ export default createRoute(async (c) => {
                     {repo.description && (
                       <div class="text-xs text-gray-500 mt-1 line-clamp-2">{repo.description}</div>
                     )}
+                    {repo.notes && (
+                      <div class="text-xs text-gray-600 mt-2 whitespace-pre-wrap border-t border-gray-100 pt-2">
+                        {repo.notes}
+                      </div>
+                    )}
                     <div class="flex items-center gap-2 mt-2">
                       {repo.language && (
                         <span class="text-xs px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
