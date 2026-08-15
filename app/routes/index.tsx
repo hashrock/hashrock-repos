@@ -82,9 +82,9 @@ export default createRoute(async (c) => {
       <img
         src="/logo.svg"
         alt="hashrock repos"
-        width={300}
-        height={300}
-        class="w-[300px] max-w-full h-auto mb-4"
+        width={200}
+        height={200}
+        class="w-[200px] max-w-full h-auto mb-4 mx-auto"
       />
       {starred.length > 0 && (
         <div class="mb-10">
