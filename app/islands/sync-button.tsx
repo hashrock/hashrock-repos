@@ -1,4 +1,5 @@
 import { useState } from "hono/jsx";
+import { apiFetch } from "../lib/api-fetch";
 
 export default function SyncButton() {
   const [loading, setLoading] = useState(false);
@@ -8,7 +9,7 @@ export default function SyncButton() {
     setLoading(true);
     setMessage("");
     try {
-      const res = await fetch("/api/repos", {
+      const res = await apiFetch("/api/repos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: "hashrock" }),

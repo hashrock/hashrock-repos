@@ -1,5 +1,6 @@
 import { useState } from "hono/jsx";
 import TagEditor from "./tag-editor";
+import { apiFetch } from "../lib/api-fetch";
 
 interface Repo {
   id: number;
@@ -78,7 +79,7 @@ export default function RepoList({ repos: initialRepos }: Props) {
 
     setBulkSaving(true);
     try {
-      const res = await fetch("/api/repos/bulk-tags", {
+      const res = await apiFetch("/api/repos/bulk-tags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -114,7 +115,7 @@ export default function RepoList({ repos: initialRepos }: Props) {
   const handleArchive = async (repoId: number) => {
     setArchiving((prev) => new Set(prev).add(repoId));
     try {
-      const res = await fetch(`/api/repos/${repoId}/archive`, {
+      const res = await apiFetch(`/api/repos/${repoId}/archive`, {
         method: "POST",
       });
       if (res.ok) {

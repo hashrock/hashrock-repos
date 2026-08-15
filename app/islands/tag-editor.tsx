@@ -1,4 +1,5 @@
 import { useState } from "hono/jsx";
+import { apiFetch } from "../lib/api-fetch";
 
 interface Props {
   repoId: number;
@@ -14,7 +15,7 @@ export default function TagEditor({ repoId, initialTags, onTagsChange }: Props) 
   const saveTags = async (newTags: string[]) => {
     setSaving(true);
     try {
-      await fetch(`/api/repos/${repoId}/tags`, {
+      await apiFetch(`/api/repos/${repoId}/tags`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tags: newTags }),
