@@ -1,113 +1,52 @@
-import { useState } from "hono/jsx";
+import { useReducer } from "hono/jsx";
 import TagEditor from "./tag-editor";
 import { apiFetch } from "../lib/api-fetch";
-
-interface Repo {
-  id: number;
-  name: string;
-  fullName: string;
-  url: string;
-  description: string | null;
-  updatedAt: string;
-  language: string | null;
-  starCount: number | null;
-  archived: boolean | null;
-  isPrivate: boolean | null;
-  createdAt: string | null;
-  star: boolean | null;
-  hide: boolean | null;
-  tags: string[];
-}
+import {
+  createInitialState,
+  repoListReducer,
+  selectBulkTagTarget,
+  selectVisibleRepos,
+  type FilterKey,
+  type SortKey,
+} from "../lib/repo-list-state";
+import type { AdminRepo } from "../lib/repo";
 
 interface Props {
-  repos: Repo[];
-}
-
-type SortKey = "updated" | "stars" | "name" | "created";
-
-function sortRepos(list: Repo[], key: SortKey): Repo[] {
-  return [...list].sort((a, b) => {
-    switch (key) {
-      case "updated":
-        return b.updatedAt.localeCompare(a.updatedAt);
-      case "created":
-        return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
-      case "stars":
-        return (b.starCount ?? 0) - (a.starCount ?? 0);
-      case "name":
-        return a.fullName.localeCompare(b.fullName);
-    }
-  });
+  repos: AdminRepo[];
 }
 
 export default function RepoList({ repos: initialRepos }: Props) {
-  const [repos, setRepos] = useState<Repo[]>(initialRepos);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [bulkTagInput, setBulkTagInput] = useState("");
-  const [bulkSaving, setBulkSaving] = useState(false);
-  const [filterNoTags, setFilterNoTags] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
-  const [sortKey, setSortKey] = useState<SortKey>("updated");
-  const [archiving, setArchiving] = useState<Set<number>>(new Set());
-  const [hiding, setHiding] = useState<Set<number>>(new Set());
-  const [showHidden, setShowHidden] = useState(false);
+  const [state, dispatch] = useReducer(
+    repoListReducer,
+    createInitialState(initialRepos)
+  );
+  const { repos, selected, bulkTagInput, bulkSaving } = state;
+  const { filters, sortKey, archiving, hiding } = state;
 
-  const filtered = repos
-    .filter((r) => (filterNoTags ? r.tags.length === 0 : true))
-    .filter((r) => (showArchived ? true : !r.archived))
-    .filter((r) => (showHidden ? true : !r.hide));
-  const displayed = sortRepos(filtered, sortKey);
+  const displayed = selectVisibleRepos(state);
 
-  const toggleSelect = (id: number) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleAll = () => {
-    if (selected.size === displayed.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(displayed.map((r) => r.id)));
-    }
-  };
+  const toggleFilter = (filter: FilterKey) =>
+    dispatch({ type: "setFilter", filter, value: !filters[filter] });
 
   const bulkAddTags = async () => {
-    const tagNames = bulkTagInput
-      .split(",")
-      .map((t) => t.trim().toLowerCase())
-      .filter(Boolean);
-    if (tagNames.length === 0 || selected.size === 0) return;
+    const target = selectBulkTagTarget(state);
+    if (!target) return;
 
-    setBulkSaving(true);
+    dispatch({ type: "bulkTagsStarted" });
+    let changes: { repoId: number; tags: string[] }[] | undefined;
     try {
       const res = await apiFetch("/admin/api/repos/bulk-tags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({
-          repoIds: Array.from(selected),
-          tags: tagNames,
-        }),
+        body: JSON.stringify({ repoIds: target.repoIds, tags: target.tags }),
       });
       const data = (await res.json()) as {
         updated: { repoId: number; tags: string[] }[];
       };
-
-      // Update local state
-      setRepos((prev) =>
-        prev.map((r) => {
-          const updated = data.updated.find((u) => u.repoId === r.id);
-          return updated ? { ...r, tags: updated.tags } : r;
-        })
-      );
-      setBulkTagInput("");
-      setSelected(new Set());
+      changes = data.updated;
     } finally {
-      setBulkSaving(false);
+      dispatch({ type: "bulkTagsFinished", changes });
     }
   };
 
@@ -119,62 +58,39 @@ export default function RepoList({ repos: initialRepos }: Props) {
   };
 
   const handleArchive = async (repoId: number) => {
-    setArchiving((prev) => new Set(prev).add(repoId));
+    dispatch({ type: "archiveStarted", repoId });
+    let ok = false;
     try {
       const res = await apiFetch(`/admin/api/repos/${repoId}/archive`, {
         method: "POST",
         credentials: "same-origin",
       });
-      if (res.ok) {
-        setRepos((prev) =>
-          prev.map((r) => (r.id === repoId ? { ...r, archived: true } : r))
-        );
-      }
+      ok = res.ok;
     } finally {
-      setArchiving((prev) => {
-        const next = new Set(prev);
-        next.delete(repoId);
-        return next;
-      });
+      dispatch({ type: "archiveFinished", repoId, ok });
     }
   };
 
-  const toggleHide = async (repoId: number, next: boolean) => {
-    setHiding((prev) => new Set(prev).add(repoId));
-    // 先に反映して戻りを待たせない。失敗したら戻す
-    setRepos((prev) =>
-      prev.map((r) => (r.id === repoId ? { ...r, hide: next } : r))
-    );
+  const toggleHide = async (repoId: number, hide: boolean) => {
+    // 先に反映して戻りを待たせない。失敗したら reducer が元の値に戻す
+    dispatch({ type: "hideStarted", repoId, hide });
+    let ok = false;
     try {
       const res = await apiFetch(`/admin/api/repos/${repoId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ hide: next }),
+        body: JSON.stringify({ hide }),
       });
-      if (!res.ok) {
-        setRepos((prev) =>
-          prev.map((r) => (r.id === repoId ? { ...r, hide: !next } : r))
-        );
-      }
-    } catch {
-      setRepos((prev) =>
-        prev.map((r) => (r.id === repoId ? { ...r, hide: !next } : r))
-      );
+      ok = res.ok;
     } finally {
-      setHiding((prev) => {
-        const nextSet = new Set(prev);
-        nextSet.delete(repoId);
-        return nextSet;
-      });
+      dispatch({ type: "hideFinished", repoId, ok });
     }
   };
 
   // TagEditorでタグ変更された時にローカルstateも更新
-  const onTagsChange = (repoId: number, newTags: string[]) => {
-    setRepos((prev) =>
-      prev.map((r) => (r.id === repoId ? { ...r, tags: newTags } : r))
-    );
+  const onTagsChange = (repoId: number, tags: string[]) => {
+    dispatch({ type: "tagsChanged", repoId, tags });
   };
 
   return (
@@ -184,8 +100,8 @@ export default function RepoList({ repos: initialRepos }: Props) {
         <label class="flex items-center gap-1.5 text-sm cursor-pointer">
           <input
             type="checkbox"
-            checked={filterNoTags}
-            onChange={() => setFilterNoTags(!filterNoTags)}
+            checked={filters.noTags}
+            onChange={() => toggleFilter("noTags")}
           />
           タグなしのみ
         </label>
@@ -193,8 +109,8 @@ export default function RepoList({ repos: initialRepos }: Props) {
         <label class="flex items-center gap-1.5 text-sm cursor-pointer">
           <input
             type="checkbox"
-            checked={showArchived}
-            onChange={() => setShowArchived(!showArchived)}
+            checked={filters.archived}
+            onChange={() => toggleFilter("archived")}
           />
           Archived表示
         </label>
@@ -202,15 +118,20 @@ export default function RepoList({ repos: initialRepos }: Props) {
         <label class="flex items-center gap-1.5 text-sm cursor-pointer">
           <input
             type="checkbox"
-            checked={showHidden}
-            onChange={() => setShowHidden(!showHidden)}
+            checked={filters.hidden}
+            onChange={() => toggleFilter("hidden")}
           />
           Hidden表示
         </label>
 
         <select
           value={sortKey}
-          onChange={(e) => setSortKey((e.target as HTMLSelectElement).value as SortKey)}
+          onChange={(e) =>
+            dispatch({
+              type: "setSortKey",
+              sortKey: (e.target as HTMLSelectElement).value as SortKey,
+            })
+          }
           class="text-sm px-2 py-1 border rounded bg-white"
         >
           <option value="updated">Updated (new)</option>
@@ -234,7 +155,10 @@ export default function RepoList({ repos: initialRepos }: Props) {
             type="text"
             value={bulkTagInput}
             onInput={(e) =>
-              setBulkTagInput((e.target as HTMLInputElement).value)
+              dispatch({
+                type: "setBulkTagInput",
+                value: (e.target as HTMLInputElement).value,
+              })
             }
             onKeyDown={handleBulkKeyDown}
             placeholder="tag1, tag2, ..."
@@ -258,7 +182,7 @@ export default function RepoList({ repos: initialRepos }: Props) {
             <input
               type="checkbox"
               checked={selected.size === displayed.length && displayed.length > 0}
-              onChange={toggleAll}
+              onChange={() => dispatch({ type: "toggleAll" })}
             />
             Select all
           </label>
@@ -270,7 +194,9 @@ export default function RepoList({ repos: initialRepos }: Props) {
               <input
                 type="checkbox"
                 checked={selected.has(repo.id)}
-                onChange={() => toggleSelect(repo.id)}
+                onChange={() =>
+                  dispatch({ type: "toggleSelect", repoId: repo.id })
+                }
                 class="mt-1.5 cursor-pointer"
               />
               <div class="flex-1 min-w-0">
@@ -373,7 +299,7 @@ export default function RepoList({ repos: initialRepos }: Props) {
 
         {displayed.length === 0 && (
           <div class="text-center py-12 text-gray-400">
-            {filterNoTags
+            {filters.noTags
               ? <p>All repositories have tags.</p>
               : <p>No repositories yet. Click "Sync from GitHub" to fetch.</p>
             }

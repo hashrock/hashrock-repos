@@ -5,6 +5,7 @@ import {
   normalizeLogoSvg,
   sanitizeSvg,
 } from "../svg";
+import { KNOWN_BYPASS_PAYLOADS } from "./svg-payloads";
 
 describe("sanitizeSvg", () => {
   it("keeps ordinary shape markup", () => {
@@ -65,11 +66,7 @@ describe("sanitizeSvg", () => {
     it("除去の結果として <script> を組み立てない", () => {
       // 1パス走査だった頃、<image>/<set>/<use> は閉じタグを持たないため
       // 単独タグ用の regex だけが発火し <scr + ipt> が連結されていた
-      for (const payload of [
-        `<svg xmlns="http://www.w3.org/2000/svg"><scr<image>ipt>alert(1)</scr<image>ipt></svg>`,
-        `<svg><scri<set>pt>alert(1)</scri<set>pt></svg>`,
-        `<svg><scr<use>ipt>alert(1)</scr<use>ipt></svg>`,
-      ]) {
+      for (const payload of KNOWN_BYPASS_PAYLOADS.assembledScript) {
         let out = "";
         try { out = sanitizeSvg(payload); } catch { out = ""; }
         expect(out).not.toMatch(/<script/i);
@@ -78,11 +75,7 @@ describe("sanitizeSvg", () => {
 
     it("スラッシュ区切りのイベントハンドラを落とす", () => {
       // HTML パーサは / も属性区切りとして扱うので \s だけでは足りない
-      for (const payload of [
-        `<svg viewBox="0 0 24 24"/onload="alert(1)"><circle r="5"/></svg>`,
-        `<svg><circle r="5"/onclick="alert(1)"></circle></svg>`,
-        `<svg><circle r="5"/onmouseover=alert(1)></circle></svg>`,
-      ]) {
+      for (const payload of KNOWN_BYPASS_PAYLOADS.slashSeparatedHandler) {
         let out = "";
         try { out = sanitizeSvg(payload); } catch { out = ""; }
         expect(out).not.toMatch(/on(load|click|mouseover)/i);
@@ -90,21 +83,25 @@ describe("sanitizeSvg", () => {
     });
 
     it("閉じていない <style> を残さない", () => {
-      for (const payload of [
-        `<svg><style>@import url(http://evil.test/x.css);</svg>`,
-        `<svg><style>circle{fill:url(http://evil.test/bg.svg)}</style xx><circle r="5"/></svg>`,
-      ]) {
+      for (const payload of KNOWN_BYPASS_PAYLOADS.unclosedStyle) {
         let out = "";
         try { out = sanitizeSvg(payload); } catch { out = ""; }
         expect(out).not.toMatch(/<style|@import|evil\.test/i);
       }
     });
 
+    it("値が空のイベントハンドラを残さない", () => {
+      // 禁止要素を切り詰めた結果、値だけが消えて /onload= が残っていた。
+      // 除去側と最後のガードで区切りの扱いが食い違っていたのが原因
+      for (const payload of KNOWN_BYPASS_PAYLOADS.emptyValueHandler) {
+        let out = "";
+        try { out = sanitizeSvg(payload); } catch { out = ""; }
+        expect(out).not.toMatch(/[\s/]on[a-z]+\s*=/i);
+      }
+    });
+
     it("実体参照で書かれた javascript: を通さない", () => {
-      for (const payload of [
-        `<svg><a href="java&#115;cript:alert(1)"><circle r="9"/></a></svg>`,
-        `<svg><a xlink:href="&#106;avascript:alert(1)"><circle r="9"/></a></svg>`,
-      ]) {
+      for (const payload of KNOWN_BYPASS_PAYLOADS.encodedScheme) {
         let out = "";
         try { out = sanitizeSvg(payload); } catch { out = ""; }
         expect(out).not.toMatch(/java.*script:/i);

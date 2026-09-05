@@ -2,30 +2,10 @@ import { useState } from "hono/jsx";
 import TagEditor from "./tag-editor";
 import { apiFetch } from "../lib/api-fetch";
 import { toStandaloneSvg } from "../lib/svg";
-
-interface Repo {
-  id: number;
-  name: string;
-  fullName: string;
-  url: string;
-  description: string | null;
-  updatedAt: string;
-  language: string | null;
-  starCount: number | null;
-  archived: boolean | null;
-  isPrivate: boolean | null;
-  createdAt: string | null;
-  notes: string | null;
-  star: boolean | null;
-  hide: boolean | null;
-  coverImageKey: string | null;
-  homepage: string | null;
-  logoSvg: string | null;
-  tags: string[];
-}
+import type { AdminRepoDetail } from "../lib/repo";
 
 interface Props {
-  repo: Repo;
+  repo: AdminRepoDetail;
 }
 
 type SaveState = "idle" | "saving" | "saved" | "error";
