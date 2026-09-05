@@ -6,6 +6,7 @@ import {
   setRepoArchived,
   setRepoDescription,
 } from "./db";
+import { normalizeTagList } from "./tags";
 import {
   fetchUserRepos,
   updateRepoTopics,
@@ -34,7 +35,9 @@ export async function updateRepoTagsWithSync(
   repoId: number,
   tagNames: string[]
 ): Promise<ServiceResult<{ repoId: number; tags: string[] }>> {
-  const data = await updateRepoTags(d1, repoId, tagNames);
+  // DB と GitHub の両方に同じ表記で書くため、境界で 1 回だけ正規化する
+  const tags = normalizeTagList(tagNames);
+  const data = await updateRepoTags(d1, repoId, tags);
 
   if (!token) {
     return { data };
@@ -46,7 +49,8 @@ export async function updateRepoTagsWithSync(
   }
 
   try {
-    await updateRepoTopics(token, repo.fullName, tagNames);
+    // DB に入った形をそのまま送る。両者が食い違わないように
+    await updateRepoTopics(token, repo.fullName, data.tags);
   } catch (e) {
     return { data, githubSyncErrors: [String(e)] };
   }
@@ -113,9 +117,10 @@ export async function bulkAddTagsWithSync(
 ): Promise<ServiceResult<{ repoId: number; tags: string[] }[]>> {
   const results: { repoId: number; tags: string[] }[] = [];
   const githubSyncErrors: string[] = [];
+  const tags = normalizeTagList(tagNames);
 
   for (const repoId of repoIds) {
-    const updatedTags = await addTagsToRepo(d1, repoId, tagNames);
+    const updatedTags = await addTagsToRepo(d1, repoId, tags);
     results.push({ repoId, tags: updatedTags });
 
     if (token) {

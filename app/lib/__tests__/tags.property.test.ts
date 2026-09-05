@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { addTag, normalizeTag, parseTagList, removeTag } from "../tags";
+import {
+  addTag,
+  normalizeTag,
+  normalizeTagList,
+  parseTagList,
+  removeTag,
+} from "../tags";
 
 /**
  * タグ編集の property-based test。
@@ -49,6 +55,38 @@ describe("normalizeTag / parseTagList のプロパティ", () => {
       fc.property(fc.array(inputArb, { maxLength: 4 }), (parts) => {
         const tags = parseTagList(parts.join(","));
         expect(parseTagList(tags.join(","))).toEqual(tags);
+      }),
+      { numRuns: RUNS }
+    );
+  });
+});
+
+describe("normalizeTagList のプロパティ", () => {
+  const rawListArb = fc.array(inputArb, { maxLength: 6 });
+
+  it("出力は正規化済み・非空・重複なし", () => {
+    // DB と GitHub の topics に渡る唯一の形。ここが崩れると
+    // 「Ops」と「ops」が別タグとして増えていく
+    fc.assert(
+      fc.property(rawListArb, (raw) => {
+        const tags = normalizeTagList(raw);
+        expect(new Set(tags).size).toBe(tags.length);
+        for (const tag of tags) {
+          expect(tag).toBe(normalizeTag(tag));
+          expect(tag).not.toBe("");
+        }
+      }),
+      { numRuns: RUNS }
+    );
+  });
+
+  it("冪等で、初出の並びを保つ", () => {
+    fc.assert(
+      fc.property(rawListArb, (raw) => {
+        const tags = normalizeTagList(raw);
+        expect(normalizeTagList(tags)).toEqual(tags);
+        const firstSeen = [...new Set(raw.map(normalizeTag).filter(Boolean))];
+        expect(tags).toEqual(firstSeen);
       }),
       { numRuns: RUNS }
     );

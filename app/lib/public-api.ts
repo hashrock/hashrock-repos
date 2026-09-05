@@ -1,3 +1,5 @@
+import type { AdminRepoDetail } from "./repo";
+
 export interface PublicRepo {
   id: number;
   name: string;
@@ -19,22 +21,27 @@ export interface PublicRepo {
   updatedAt: string;
 }
 
-interface RepoRow {
-  id: number;
-  name: string;
-  fullName: string;
-  url: string;
-  description: string | null;
-  updatedAt: string;
-  language: string | null;
-  starCount: number | null;
-  isPrivate: boolean | null;
-  notes: string | null;
-  coverImageKey: string | null;
-  homepage: string | null;
-  logoSvg: string | null;
-  tags: string[];
-}
+/**
+ * 公開 API が読む列。管理画面の行から、公開してよいものだけを取る
+ * (archived / star / hide は出さない)。
+ */
+export type RepoRow = Pick<
+  AdminRepoDetail,
+  | "id"
+  | "name"
+  | "fullName"
+  | "url"
+  | "description"
+  | "updatedAt"
+  | "language"
+  | "starCount"
+  | "isPrivate"
+  | "notes"
+  | "coverImageKey"
+  | "homepage"
+  | "logoSvg"
+  | "tags"
+>;
 
 /**
  * 公開 API 用に整形する。出す情報は公開トップページと揃える。

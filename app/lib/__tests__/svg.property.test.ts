@@ -7,6 +7,7 @@ import {
   normalizeLogoSvg,
   sanitizeSvg,
 } from "../svg";
+import { ALL_KNOWN_BYPASS_PAYLOADS } from "./svg-payloads";
 
 /**
  * sanitizeSvg の property-based test。
@@ -46,10 +47,19 @@ const hostileChunk = fc.oneof(
   fc.string({ maxLength: 4 })
 );
 
-/** 敵対的な SVG ドキュメント。入口の検証は通る形に整えておく */
-const hostileSvg = fc
-  .array(hostileChunk, { maxLength: 24 })
-  .map((parts) => `<svg>${parts.join("")}</svg>`);
+/**
+ * 敵対的な SVG ドキュメント。入口の検証は通る形に整えておく。
+ *
+ * 断片の合成に加えて、過去に突破が確認された payload そのものも種にする。
+ * 例示テストはその 1 件が直ったかしか見ないが、ここに混ぜれば同じ入力が
+ * 冪等・閉じタグ・実体参照といった全プロパティの検査を受ける。
+ */
+const hostileSvg = fc.oneof(
+  fc
+    .array(hostileChunk, { maxLength: 24 })
+    .map((parts) => `<svg>${parts.join("")}</svg>`),
+  fc.constantFrom(...ALL_KNOWN_BYPASS_PAYLOADS)
+);
 
 /** 無害な SVG。サニタイズが正常なロゴを壊さないことを見るために使う */
 const benignSvg = fc

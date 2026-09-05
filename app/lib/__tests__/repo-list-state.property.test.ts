@@ -8,10 +8,10 @@ import {
   sortRepos,
   type FilterKey,
   type RepoListAction,
-  type RepoListItem,
   type RepoListState,
   type SortKey,
 } from "../repo-list-state";
+import type { AdminRepo } from "../repo";
 
 /**
  * 管理画面の一覧が持つ状態遷移の property-based test。
@@ -46,7 +46,7 @@ const repoBodyArb = fc.record({
   tags: tagsArb,
 });
 
-const reposArb: fc.Arbitrary<RepoListItem[]> = fc
+const reposArb: fc.Arbitrary<AdminRepo[]> = fc
   .array(repoBodyArb, { minLength: 1, maxLength: 5 })
   .map((bodies) =>
     bodies.map((body, i) => ({
@@ -65,10 +65,6 @@ function actionArb(ids: number[]): fc.Arbitrary<RepoListAction> {
   const idArb = fc.constantFrom(...ids);
   const idAction = (type: RepoListAction["type"]) =>
     idArb.map((repoId) => ({ type, repoId }) as RepoListAction);
-  const hideAction = (type: RepoListAction["type"]) =>
-    fc
-      .tuple(idArb, fc.boolean())
-      .map(([repoId, hide]) => ({ type, repoId, hide }) as RepoListAction);
 
   return fc.oneof(
     idAction("toggleSelect"),
@@ -89,12 +85,14 @@ function actionArb(ids: number[]): fc.Arbitrary<RepoListAction> {
       .map((value): RepoListAction => ({ type: "setBulkTagInput", value })),
     fc.constant<RepoListAction>({ type: "bulkTagsStarted" }),
     fc
-      .uniqueArray(fc.record({ repoId: idArb, tags: tagsArb }), {
-        selector: (c) => c.repoId,
-        maxLength: 3,
-      })
-      .map((changes): RepoListAction => ({ type: "bulkTagsApplied", changes })),
-    fc.constant<RepoListAction>({ type: "bulkTagsSettled" }),
+      .option(
+        fc.uniqueArray(fc.record({ repoId: idArb, tags: tagsArb }), {
+          selector: (c) => c.repoId,
+          maxLength: 3,
+        }),
+        { nil: undefined }
+      )
+      .map((changes): RepoListAction => ({ type: "bulkTagsFinished", changes })),
     fc
       .tuple(idArb, tagsArb)
       .map(([repoId, tags]): RepoListAction => ({
@@ -103,16 +101,32 @@ function actionArb(ids: number[]): fc.Arbitrary<RepoListAction> {
         tags,
       })),
     idAction("archiveStarted"),
-    idAction("archived"),
-    idAction("archiveSettled"),
-    hideAction("hideStarted"),
-    hideAction("hideRolledBack"),
-    idAction("hideSettled")
+    fc
+      .tuple(idArb, fc.boolean())
+      .map(([repoId, ok]): RepoListAction => ({
+        type: "archiveFinished",
+        repoId,
+        ok,
+      })),
+    fc
+      .tuple(idArb, fc.boolean())
+      .map(([repoId, hide]): RepoListAction => ({
+        type: "hideStarted",
+        repoId,
+        hide,
+      })),
+    fc
+      .tuple(idArb, fc.boolean())
+      .map(([repoId, ok]): RepoListAction => ({
+        type: "hideFinished",
+        repoId,
+        ok,
+      }))
   );
 }
 
 interface Scenario {
-  repos: RepoListItem[];
+  repos: AdminRepo[];
   actions: RepoListAction[];
 }
 
@@ -131,12 +145,12 @@ function run(scenario: Scenario): RepoListState {
   );
 }
 
-function ids(repos: RepoListItem[]): number[] {
+function ids(repos: AdminRepo[]): number[] {
   return repos.map((r) => r.id);
 }
 
 /** repos は必ず 1 件以上あるので、任意の整数から 1 行選べる */
-function pickRepo(state: RepoListState, i: number): RepoListItem {
+function pickRepo(state: RepoListState, i: number): AdminRepo {
   return state.repos[i % state.repos.length];
 }
 
@@ -156,10 +170,12 @@ describe("repoListReducer の不変条件", () => {
         const state = run(scenario);
         expect(ids(state.repos)).toEqual(ids(scenario.repos));
         const known = new Set(ids(state.repos));
-        for (const set of [state.selected, state.archiving, state.hiding]) {
-          for (const id of set) {
-            expect(known.has(id)).toBe(true);
-          }
+        for (const id of [
+          ...state.selected,
+          ...state.archiving,
+          ...state.hiding.keys(),
+        ]) {
+          expect(known.has(id)).toBe(true);
         }
       }),
       { numRuns: RUNS }
@@ -235,17 +251,17 @@ describe("repoListReducer の不変条件", () => {
     );
   });
 
-  it("hide の楽観更新はロールバックで元に戻る", () => {
-    // hide は nullable だが、ロールバックが戻すのは boolean。表示上は
-    // 同じ意味なので、画面が使う ?? false に揃えてから比べる
-    const asDisplayed = (repos: RepoListItem[]) =>
-      repos.map((r) => ({ ...r, hide: r.hide ?? false }));
-
+  it("hide の楽観更新は、失敗すると元の値ちょうどに戻る", () => {
+    // null と false は表示上どちらも「隠していない」だが、戻し方を間違えると
+    // 列の値が勝手に書き換わる。?? false で潰さずそのまま比べる
     fc.assert(
       fc.property(scenarioArb, fc.nat(), (scenario, i) => {
         const before = run(scenario);
         const { id: repoId, hide: original } = pickRepo(before, i);
-        // UI は必ず現在値の反転を送り、失敗したら元の値を送り直す
+        // 送信中はボタンが disabled なので、二重に送られている状態は見ない
+        // (その場合に控えを上書きしないことは冪等のプロパティが押さえている)
+        if (before.hiding.has(repoId)) return;
+        // UI は必ず現在値の反転を送る
         const hide = !original;
         const started = repoListReducer(before, {
           type: "hideStarted",
@@ -254,26 +270,45 @@ describe("repoListReducer の不変条件", () => {
         });
         expect(started.repos.find((r) => r.id === repoId)?.hide).toBe(hide);
         const rolledBack = repoListReducer(started, {
-          type: "hideRolledBack",
+          type: "hideFinished",
           repoId,
-          hide: !hide,
+          ok: false,
         });
-        expect(asDisplayed(rolledBack.repos)).toEqual(asDisplayed(before.repos));
+        expect(rolledBack.repos).toEqual(before.repos);
       }),
       { numRuns: RUNS }
     );
   });
 
-  it("settle すれば必ず処理中から外れる", () => {
-    // finally で必ず settle するので、どんな順に飛んでもボタンが
+  it("hide の楽観更新は、成功すると送った値のまま残る", () => {
+    fc.assert(
+      fc.property(scenarioArb, fc.nat(), fc.boolean(), (scenario, i, hide) => {
+        const before = run(scenario);
+        const repoId = pickRepo(before, i).id;
+        const after = repoListReducer(
+          repoListReducer(before, { type: "hideStarted", repoId, hide }),
+          { type: "hideFinished", repoId, ok: true }
+        );
+        expect(after.repos.find((r) => r.id === repoId)?.hide).toBe(hide);
+      }),
+      { numRuns: RUNS }
+    );
+  });
+
+  it("finished を流せば必ず処理中から外れる", () => {
+    // finally で必ず finished を投げるので、どんな順に飛んでもボタンが
     // disabled のまま固まらないこと
     fc.assert(
       fc.property(scenarioArb, (scenario) => {
         const drained = ids(scenario.repos).reduce(
           (state, repoId) =>
             repoListReducer(
-              repoListReducer(state, { type: "archiveSettled", repoId }),
-              { type: "hideSettled", repoId }
+              repoListReducer(state, {
+                type: "archiveFinished",
+                repoId,
+                ok: false,
+              }),
+              { type: "hideFinished", repoId, ok: true }
             ),
           run(scenario)
         );
@@ -289,20 +324,23 @@ describe("repoListReducer の不変条件", () => {
       fc.property(scenarioArb, fc.nat(), (scenario, i) => {
         const before = run(scenario);
         const repoId = pickRepo(before, i).id;
-        const cases: { action: RepoListAction; patch: Partial<RepoListItem> }[] =
+        const cases: { action: RepoListAction; patch: Partial<AdminRepo> }[] =
           [
             {
               action: { type: "tagsChanged", repoId, tags: ["ops"] },
               patch: { tags: ["ops"] },
             },
-            { action: { type: "archived", repoId }, patch: { archived: true } },
+            {
+              action: { type: "archiveFinished", repoId, ok: true },
+              patch: { archived: true },
+            },
             {
               action: { type: "hideStarted", repoId, hide: true },
               patch: { hide: true },
             },
             {
-              action: { type: "hideRolledBack", repoId, hide: false },
-              patch: { hide: false },
+              action: { type: "hideFinished", repoId, ok: true },
+              patch: {},
             },
           ];
         for (const { action, patch } of cases) {
@@ -324,7 +362,7 @@ describe("repoListReducer の不変条件", () => {
     fc.assert(
       fc.property(scenarioArb, (scenario) => {
         const after = repoListReducer(run(scenario), {
-          type: "bulkTagsApplied",
+          type: "bulkTagsFinished",
           changes: [],
         });
         expect(after.selected.size).toBe(0);
@@ -384,7 +422,7 @@ describe("sortRepos の不変条件", () => {
     // 昇降の向きは実装から独立に書く。実装の比較関数を借りると検算にならない
     const ordered: Record<
       SortKey,
-      (a: RepoListItem, b: RepoListItem) => boolean
+      (a: AdminRepo, b: AdminRepo) => boolean
     > = {
       updated: (a, b) => a.updatedAt >= b.updatedAt,
       created: (a, b) => (a.createdAt ?? "") >= (b.createdAt ?? ""),

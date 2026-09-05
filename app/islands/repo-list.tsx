@@ -7,12 +7,12 @@ import {
   selectBulkTagTarget,
   selectVisibleRepos,
   type FilterKey,
-  type RepoListItem,
   type SortKey,
 } from "../lib/repo-list-state";
+import type { AdminRepo } from "../lib/repo";
 
 interface Props {
-  repos: RepoListItem[];
+  repos: AdminRepo[];
 }
 
 export default function RepoList({ repos: initialRepos }: Props) {
@@ -33,6 +33,7 @@ export default function RepoList({ repos: initialRepos }: Props) {
     if (!target) return;
 
     dispatch({ type: "bulkTagsStarted" });
+    let changes: { repoId: number; tags: string[] }[] | undefined;
     try {
       const res = await apiFetch("/admin/api/repos/bulk-tags", {
         method: "POST",
@@ -43,9 +44,9 @@ export default function RepoList({ repos: initialRepos }: Props) {
       const data = (await res.json()) as {
         updated: { repoId: number; tags: string[] }[];
       };
-      dispatch({ type: "bulkTagsApplied", changes: data.updated });
+      changes = data.updated;
     } finally {
-      dispatch({ type: "bulkTagsSettled" });
+      dispatch({ type: "bulkTagsFinished", changes });
     }
   };
 
@@ -58,22 +59,22 @@ export default function RepoList({ repos: initialRepos }: Props) {
 
   const handleArchive = async (repoId: number) => {
     dispatch({ type: "archiveStarted", repoId });
+    let ok = false;
     try {
       const res = await apiFetch(`/admin/api/repos/${repoId}/archive`, {
         method: "POST",
         credentials: "same-origin",
       });
-      if (res.ok) {
-        dispatch({ type: "archived", repoId });
-      }
+      ok = res.ok;
     } finally {
-      dispatch({ type: "archiveSettled", repoId });
+      dispatch({ type: "archiveFinished", repoId, ok });
     }
   };
 
   const toggleHide = async (repoId: number, hide: boolean) => {
-    // 先に反映して戻りを待たせない。失敗したら戻す
+    // 先に反映して戻りを待たせない。失敗したら reducer が元の値に戻す
     dispatch({ type: "hideStarted", repoId, hide });
+    let ok = false;
     try {
       const res = await apiFetch(`/admin/api/repos/${repoId}`, {
         method: "PATCH",
@@ -81,13 +82,9 @@ export default function RepoList({ repos: initialRepos }: Props) {
         credentials: "same-origin",
         body: JSON.stringify({ hide }),
       });
-      if (!res.ok) {
-        dispatch({ type: "hideRolledBack", repoId, hide: !hide });
-      }
-    } catch {
-      dispatch({ type: "hideRolledBack", repoId, hide: !hide });
+      ok = res.ok;
     } finally {
-      dispatch({ type: "hideSettled", repoId });
+      dispatch({ type: "hideFinished", repoId, ok });
     }
   };
 

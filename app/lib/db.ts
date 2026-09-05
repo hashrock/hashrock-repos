@@ -2,6 +2,8 @@ import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
 import { and, eq, inArray } from "drizzle-orm";
 import { repositories, tags, repositoryTags } from "../db/schema";
 import { KANBAN_COLUMNS } from "./constants";
+import { normalizeTagList } from "./tags";
+import { planRepoSync } from "./repo-sync-plan";
 import type { GitHubRepo } from "./github";
 
 function getDb(d1: D1Database) {
@@ -48,103 +50,59 @@ async function linkRepoTags(
   }
 }
 
+/** GitHub の topics を DB のタグに反映する。topics が空のときは触らない */
+async function syncTopics(
+  db: DrizzleD1Database,
+  repoId: number,
+  repo: GitHubRepo
+): Promise<void> {
+  if (!repo.topics || repo.topics.length === 0) {
+    return;
+  }
+  await db.delete(repositoryTags).where(eq(repositoryTags.repositoryId, repoId));
+  const tagIds = await ensureTagIds(db, normalizeTagList(repo.topics));
+  await linkRepoTags(db, repoId, tagIds);
+}
+
+/** GitHub 由来の列。sync のたびに上書きする。手で編集する列は触らない */
+function githubColumns(repo: GitHubRepo) {
+  return {
+    githubId: repo.id,
+    name: repo.name,
+    fullName: repo.full_name,
+    url: repo.html_url,
+    description: repo.description,
+    updatedAt: repo.updated_at,
+    language: repo.language,
+    starCount: repo.stargazers_count,
+    archived: repo.archived,
+    isPrivate: repo.private,
+    homepage: repo.homepage,
+    createdAt: repo.created_at,
+  };
+}
+
 export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
   const db = getDb(d1);
 
-  // 今回の sync で触れた内部 id を記録。最後にここに含まれない行を削除する。
-  const touchedIds = new Set<number>();
-
-  for (const repo of repos) {
-    // 不変の github_id で照合するのが正。これが一致すればリネーム/オーナー変更でも同一レコード。
-    let existing = await db
-      .select()
-      .from(repositories)
-      .where(eq(repositories.githubId, repo.id))
-      .get();
-
-    // 移行期フォールバック: github_id 未登録 (nullable) の既存行は full_name で拾って埋め戻す。
-    // 既に別の github_id が入っている行を横取りしないため githubId === null の時だけ採用する。
-    if (!existing) {
-      const byName = await db
-        .select()
-        .from(repositories)
-        .where(eq(repositories.fullName, repo.full_name))
-        .get();
-      if (byName && byName.githubId === null) {
-        existing = byName;
-      }
-    }
-
-    let repoId: number;
-
-    if (existing) {
-      await db
-        .update(repositories)
-        .set({
-          githubId: repo.id,
-          name: repo.name,
-          fullName: repo.full_name,
-          url: repo.html_url,
-          description: repo.description,
-          updatedAt: repo.updated_at,
-          language: repo.language,
-          starCount: repo.stargazers_count,
-          archived: repo.archived,
-          isPrivate: repo.private,
-          homepage: repo.homepage,
-          createdAt: repo.created_at,
-        })
-        .where(eq(repositories.id, existing.id));
-      repoId = existing.id;
-    } else {
-      const inserted = await db
-        .insert(repositories)
-        .values({
-          githubId: repo.id,
-          name: repo.name,
-          fullName: repo.full_name,
-          url: repo.html_url,
-          description: repo.description,
-          updatedAt: repo.updated_at,
-          language: repo.language,
-          starCount: repo.stargazers_count,
-          archived: repo.archived,
-          isPrivate: repo.private,
-          homepage: repo.homepage,
-          createdAt: repo.created_at,
-        })
-        .returning()
-        .get();
-      repoId = inserted.id;
-    }
-
-    touchedIds.add(repoId);
-
-    if (repo.topics && repo.topics.length > 0) {
-      await db
-        .delete(repositoryTags)
-        .where(eq(repositoryTags.repositoryId, repoId));
-
-      const tagIds = await ensureTagIds(db, repo.topics);
-      await linkRepoTags(db, repoId, tagIds);
-    }
-  }
-
-  // GitHub から消えた (削除 / 非公開化など) リポジトリを DB からも削除する。
-  // リネームやオーナー変更は github_id で追従済みなので、ここに残るのは本当に消えた行だけ。
-  const allDbRepos = await db
-    .select({ id: repositories.id })
+  // 突き合わせは 1 回の select で取った棚卸しに対して純粋に行う。
+  // 行を消す判断が絡むので、規則と不変条件は repo-sync-plan.ts 側に置く
+  const existing = await db
+    .select({
+      id: repositories.id,
+      githubId: repositories.githubId,
+      fullName: repositories.fullName,
+    })
     .from(repositories)
     .all();
-  const idsToDelete = allDbRepos
-    .map((r) => r.id)
-    .filter((id) => !touchedIds.has(id));
+  const plan = planRepoSync(existing, repos);
 
-  if (idsToDelete.length > 0) {
+  // full_name の UNIQUE 制約があるので、名前を手放す側から順に片付ける
+  if (plan.deleteIds.length > 0) {
     // D1 の 100 パラメータ制限に合わせてチャンク削除。FK に cascade がないので先に repositoryTags を消す
     const CHUNK_SIZE = 80;
-    for (let i = 0; i < idsToDelete.length; i += CHUNK_SIZE) {
-      const chunk = idsToDelete.slice(i, i + CHUNK_SIZE);
+    for (let i = 0; i < plan.deleteIds.length; i += CHUNK_SIZE) {
+      const chunk = plan.deleteIds.slice(i, i + CHUNK_SIZE);
       await db
         .delete(repositoryTags)
         .where(inArray(repositoryTags.repositoryId, chunk));
@@ -154,7 +112,24 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
     }
   }
 
-  return { synced: repos.length, deleted: idsToDelete.length };
+  for (const { rowId, repo } of plan.updates) {
+    await db
+      .update(repositories)
+      .set(githubColumns(repo))
+      .where(eq(repositories.id, rowId));
+    await syncTopics(db, rowId, repo);
+  }
+
+  for (const repo of plan.inserts) {
+    const inserted = await db
+      .insert(repositories)
+      .values(githubColumns(repo))
+      .returning()
+      .get();
+    await syncTopics(db, inserted.id, repo);
+  }
+
+  return { synced: repos.length, deleted: plan.deleteIds.length };
 }
 
 export interface ListReposOptions {
@@ -396,6 +371,10 @@ export async function setRepoCoverImageKey(
   return { repoId, coverImageKey: key };
 }
 
+/**
+ * タグを丸ごと入れ替える。tagNames は正規化済みであること
+ * (service 層の normalizeTagList を通す。呼び出し元はそこだけ)
+ */
 export async function updateRepoTags(
   d1: D1Database,
   repoId: number,
@@ -413,6 +392,7 @@ export async function updateRepoTags(
   return { repoId, tags: tagNames };
 }
 
+/** 既に付いているタグはそのままに足す。newTagNames は正規化済みであること */
 export async function addTagsToRepo(
   d1: D1Database,
   repoId: number,

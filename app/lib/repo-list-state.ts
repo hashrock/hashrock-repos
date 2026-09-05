@@ -1,22 +1,5 @@
 import { parseTagList } from "./tags";
-
-/** 管理画面の一覧が扱う 1 行。listRepos の戻りに tags を足したもの */
-export interface RepoListItem {
-  id: number;
-  name: string;
-  fullName: string;
-  url: string;
-  description: string | null;
-  updatedAt: string;
-  language: string | null;
-  starCount: number | null;
-  archived: boolean | null;
-  isPrivate: boolean | null;
-  createdAt: string | null;
-  star: boolean | null;
-  hide: boolean | null;
-  tags: string[];
-}
+import type { AdminRepo } from "./repo";
 
 export type SortKey = "updated" | "stars" | "name" | "created";
 
@@ -32,7 +15,7 @@ export interface RepoListFilters {
 }
 
 export interface RepoListState {
-  repos: RepoListItem[];
+  repos: AdminRepo[];
   /**
    * チェックを入れた repo の id。絞り込みを変えて表示から外れても保持する
    * (チェックしてから一覧を絞っただけで選択が消えると使いづらいため)。
@@ -44,8 +27,11 @@ export interface RepoListState {
   sortKey: SortKey;
   /** archive リクエストが飛んでいる repo の id */
   archiving: Set<number>;
-  /** hide/unhide リクエストが飛んでいる repo の id */
-  hiding: Set<number>;
+  /**
+   * hide/unhide リクエストが飛んでいる repo の id と、楽観更新する前の値。
+   * 失敗したときは null も含めてこの値に戻す
+   */
+  hiding: Map<number, boolean | null>;
 }
 
 export type RepoListAction =
@@ -55,19 +41,16 @@ export type RepoListAction =
   | { type: "setSortKey"; sortKey: SortKey }
   | { type: "setBulkTagInput"; value: string }
   | { type: "bulkTagsStarted" }
-  | { type: "bulkTagsApplied"; changes: { repoId: number; tags: string[] }[] }
-  | { type: "bulkTagsSettled" }
+  /** 送信の後始末。changes が無ければ失敗したということ */
+  | { type: "bulkTagsFinished"; changes?: { repoId: number; tags: string[] }[] }
   | { type: "tagsChanged"; repoId: number; tags: string[] }
   | { type: "archiveStarted"; repoId: number }
-  | { type: "archived"; repoId: number }
-  | { type: "archiveSettled"; repoId: number }
+  | { type: "archiveFinished"; repoId: number; ok: boolean }
   /** 楽観更新。サーバの返事を待たずに hide を書き換える */
   | { type: "hideStarted"; repoId: number; hide: boolean }
-  /** 楽観更新の取り消し。hide には戻したい値を入れる */
-  | { type: "hideRolledBack"; repoId: number; hide: boolean }
-  | { type: "hideSettled"; repoId: number };
+  | { type: "hideFinished"; repoId: number; ok: boolean };
 
-export function createInitialState(repos: RepoListItem[]): RepoListState {
+export function createInitialState(repos: AdminRepo[]): RepoListState {
   return {
     repos,
     selected: new Set(),
@@ -76,16 +59,16 @@ export function createInitialState(repos: RepoListItem[]): RepoListState {
     filters: { noTags: false, archived: false, hidden: false },
     sortKey: "updated",
     archiving: new Set(),
-    hiding: new Set(),
+    hiding: new Map(),
   };
 }
 
 /** 対象の repo だけ差し替える。他の行はオブジェクトごと使い回す */
 function updateRepo(
-  repos: RepoListItem[],
+  repos: AdminRepo[],
   repoId: number,
-  patch: Partial<RepoListItem>
-): RepoListItem[] {
+  patch: Partial<AdminRepo>
+): AdminRepo[] {
   return repos.map((r) => (r.id === repoId ? { ...r, ...patch } : r));
 }
 
@@ -129,16 +112,23 @@ export function repoListReducer(
       return { ...state, bulkTagInput: action.value };
     case "bulkTagsStarted":
       return { ...state, bulkSaving: true };
-    case "bulkTagsApplied": {
+    case "bulkTagsFinished": {
+      if (!action.changes) {
+        return { ...state, bulkSaving: false };
+      }
       const changed = new Map(action.changes.map((c) => [c.repoId, c.tags]));
       const repos = state.repos.map((r) => {
         const tags = changed.get(r.id);
         return tags ? { ...r, tags } : r;
       });
-      return { ...state, repos, bulkTagInput: "", selected: new Set() };
+      return {
+        ...state,
+        repos,
+        bulkTagInput: "",
+        selected: new Set(),
+        bulkSaving: false,
+      };
     }
-    case "bulkTagsSettled":
-      return { ...state, bulkSaving: false };
     case "tagsChanged":
       return {
         ...state,
@@ -146,33 +136,48 @@ export function repoListReducer(
       };
     case "archiveStarted":
       return { ...state, archiving: withId(state.archiving, action.repoId) };
-    case "archived":
+    case "archiveFinished":
       return {
         ...state,
-        repos: updateRepo(state.repos, action.repoId, { archived: true }),
+        repos: action.ok
+          ? updateRepo(state.repos, action.repoId, { archived: true })
+          : state.repos,
+        archiving: withoutId(state.archiving, action.repoId),
       };
-    case "archiveSettled":
-      return { ...state, archiving: withoutId(state.archiving, action.repoId) };
-    case "hideStarted":
+    case "hideStarted": {
+      // 連打で 2 回目が飛んでも、控えるのは最初の値。上書きすると
+      // 楽観更新した値を「元の値」として覚えてしまう
+      const previous = state.hiding.has(action.repoId)
+        ? state.hiding.get(action.repoId)!
+        : (state.repos.find((r) => r.id === action.repoId)?.hide ?? null);
+      const hiding = new Map(state.hiding).set(action.repoId, previous);
       return {
         ...state,
         repos: updateRepo(state.repos, action.repoId, { hide: action.hide }),
-        hiding: withId(state.hiding, action.repoId),
+        hiding,
       };
-    case "hideRolledBack":
+    }
+    case "hideFinished": {
+      const hiding = new Map(state.hiding);
+      const previous = hiding.get(action.repoId);
+      hiding.delete(action.repoId);
       return {
         ...state,
-        repos: updateRepo(state.repos, action.repoId, { hide: action.hide }),
+        // 失敗したら、楽観更新する前の値をそのまま戻す
+        repos:
+          action.ok || previous === undefined
+            ? state.repos
+            : updateRepo(state.repos, action.repoId, { hide: previous }),
+        hiding,
       };
-    case "hideSettled":
-      return { ...state, hiding: withoutId(state.hiding, action.repoId) };
+    }
   }
 }
 
 export function sortRepos(
-  list: RepoListItem[],
+  list: AdminRepo[],
   key: SortKey
-): RepoListItem[] {
+): AdminRepo[] {
   return [...list].sort((a, b) => {
     switch (key) {
       case "updated":
@@ -188,7 +193,7 @@ export function sortRepos(
 }
 
 /** 絞り込みと並べ替えを適用した、実際に画面に出る行 */
-export function selectVisibleRepos(state: RepoListState): RepoListItem[] {
+export function selectVisibleRepos(state: RepoListState): AdminRepo[] {
   const filtered = state.repos.filter(
     (r) =>
       (!state.filters.noTags || r.tags.length === 0) &&

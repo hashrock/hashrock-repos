@@ -1,14 +1,31 @@
 /**
- * タグ文字列の正規化。DB にもトピックにも小文字で入る前提なので、
+ * タグ文字列の正規化。DB にも GitHub の topics にも小文字で入る前提なので、
  * 入力を受ける場所ごとに trim/toLowerCase を書かずここに寄せる。
  */
 export function normalizeTag(input: string): string {
   return input.trim().toLowerCase();
 }
 
-/** 一括入力用。カンマ区切りを正規化済みのタグ列にする。空要素は落とす */
+/**
+ * 正規化して、空文字と重複を落とす。初出の並びは保つ。
+ * 外から来たタグ列は必ずこれを通してから DB と GitHub に渡すこと。
+ */
+export function normalizeTagList(tags: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of tags) {
+    const tag = normalizeTag(raw);
+    if (tag && !seen.has(tag)) {
+      seen.add(tag);
+      result.push(tag);
+    }
+  }
+  return result;
+}
+
+/** 一括入力用。カンマ区切りを正規化済みのタグ列にする */
 export function parseTagList(input: string): string[] {
-  return input.split(",").map(normalizeTag).filter(Boolean);
+  return normalizeTagList(input.split(","));
 }
 
 /**

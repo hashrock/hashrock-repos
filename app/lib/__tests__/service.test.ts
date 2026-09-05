@@ -7,6 +7,7 @@ import {
   syncReposFromGitHub,
 } from "../service";
 import type { GitHubRepo } from "../github";
+import { githubRepo } from "./github-fixtures";
 
 vi.mock("../db", () => ({
   syncRepos: vi.fn(),
@@ -66,25 +67,6 @@ function repoRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** GitHub API が返すリポジトリ 1 件 */
-function githubRepo(): GitHubRepo {
-  return {
-    id: 12345,
-    name: "repo1",
-    full_name: "user/repo1",
-    html_url: "https://github.com/user/repo1",
-    description: null,
-    updated_at: "2024-01-01",
-    language: null,
-    stargazers_count: 0,
-    archived: false,
-    created_at: "2024-01-01",
-    topics: [],
-    private: false,
-    homepage: null,
-  };
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -116,6 +98,26 @@ describe("updateRepoTagsWithSync", () => {
     expect(result).toEqual({
       data: { repoId: 1, tags: ["tag1"] },
     });
+  });
+
+  it("normalises tags before writing to the DB and GitHub", async () => {
+    // 表記ゆれのまま入れると「Ops」と「ops」が別タグとして増える。
+    // DB と GitHub に同じ形が渡ることまで見る
+    // db は受け取った形をそのまま返す
+    vi.mocked(updateRepoTags).mockImplementation(async (_d1, repoId, tags) => ({
+      repoId,
+      tags,
+    }));
+    vi.mocked(getRepoById).mockResolvedValue(repoRow());
+    vi.mocked(updateRepoTopics).mockResolvedValue(undefined);
+
+    await updateRepoTagsWithSync(mockD1, "token", 1, [" Ops ", "OPS", "", "web"]);
+
+    expect(updateRepoTags).toHaveBeenCalledWith(mockD1, 1, ["ops", "web"]);
+    expect(updateRepoTopics).toHaveBeenCalledWith("token", "user/repo", [
+      "ops",
+      "web",
+    ]);
   });
 
   it("skips GitHub sync when token is undefined", async () => {
@@ -197,6 +199,16 @@ describe("bulkAddTagsWithSync", () => {
         { repoId: 2, tags: ["new"] },
       ],
     });
+  });
+
+  it("normalises tags once, before touching any repo", async () => {
+    vi.mocked(addTagsToRepo).mockResolvedValue(["ops"]);
+    vi.mocked(getRepoById).mockResolvedValue(repoRow());
+    vi.mocked(updateRepoTopics).mockResolvedValue(undefined);
+
+    await bulkAddTagsWithSync(mockD1, "token", [1], ["  OPS ", "ops", " "]);
+
+    expect(addTagsToRepo).toHaveBeenCalledWith(mockD1, 1, ["ops"]);
   });
 
   it("collects GitHub sync errors without stopping", async () => {
