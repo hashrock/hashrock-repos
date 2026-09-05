@@ -16,8 +16,49 @@ export class SvgValidationError extends Error {}
  * 同じ轍を踏まないよう、除去は変化しなくなるまで繰り返す。
  */
 
-const FORBIDDEN_ELEMENTS =
-  "script|foreignObject|iframe|use|image|animate|animateTransform|animateMotion|set|style|handler";
+/** 落とす要素。プロパティテストからも参照するので配列で持つ */
+export const FORBIDDEN_ELEMENTS = [
+  "script",
+  "foreignObject",
+  "iframe",
+  "use",
+  "image",
+  "animate",
+  "animateTransform",
+  "animateMotion",
+  "set",
+  "style",
+  "handler",
+] as const;
+
+const ELEMENTS = FORBIDDEN_ELEMENTS.join("|");
+
+/**
+ * イベントハンドラ属性の「区切り + 名前 + =」。
+ *
+ * 除去側と最後のガードで **同じもの** を見るために一箇所にまとめる。
+ * 以前ここが食い違っており、除去側は `/` も区切りとして扱うのにガードは
+ * `\s` しか見ていなかったため、値が空の `/onload=` が最後の網を素通り
+ * していた。組み立てを共有していれば構造的に食い違わない。
+ */
+const ON_ATTR = String.raw`[\s/]on[a-z]+\s*=`;
+
+/** 閉じタグまで一組で落とす */
+const PAIRED_ELEMENT = new RegExp(`<(${ELEMENTS})\\b[\\s\\S]*?</\\1\\s*>`, "gi");
+/** 閉じタグが無いものは以降を末尾まで捨てる */
+const UNCLOSED_ELEMENT = new RegExp(`<(${ELEMENTS})\\b[^>]*>[\\s\\S]*$`, "gi");
+/** 単独タグ */
+const VOID_ELEMENT = new RegExp(`<(${ELEMENTS})\\b[^>]*/?>`, "gi");
+
+const ON_ATTR_DQUOTED = new RegExp(`${ON_ATTR}\\s*"[^"]*"`, "gi");
+const ON_ATTR_SQUOTED = new RegExp(`${ON_ATTR}\\s*'[^']*'`, "gi");
+// 値は空でもよい。`[^\s>]+` だと `<circle/onload=>` や、上の切り詰めで
+// 末尾ごと消えた `/onload=` が残る。`<` を値に含めないのは、閉じタグを
+// 属性値として飲み込んで別のマークアップを組み立てないため
+const ON_ATTR_BARE = new RegExp(`${ON_ATTR}\\s*[^\\s<>]*`, "gi");
+
+/** 最後の網。除去しきれていなければ受け取らない */
+const UNSAFE_RESIDUE = new RegExp(`<script\\b|${ON_ATTR}|javascript:`, "i");
 
 /** &#106; や &#x6a; を実際の文字に戻す。javascript: の判定を素通りさせないため */
 function decodeEntities(input: string): string {
@@ -33,21 +74,15 @@ function stripOnce(svg: string): string {
   // 閉じていない <style> が残ると @import で外部を引けてしまうため、
   // 閉じタグが無い場合は以降を末尾まで捨てる。
   let out = svg;
-  out = out.replace(
-    new RegExp(`<(${FORBIDDEN_ELEMENTS})\\b[\\s\\S]*?</\\1\\s*>`, "gi"),
-    ""
-  );
-  out = out.replace(
-    new RegExp(`<(${FORBIDDEN_ELEMENTS})\\b[^>]*>[\\s\\S]*$`, "gi"),
-    ""
-  );
-  out = out.replace(new RegExp(`<(${FORBIDDEN_ELEMENTS})\\b[^>]*/?>`, "gi"), "");
+  out = out.replace(PAIRED_ELEMENT, "");
+  out = out.replace(UNCLOSED_ELEMENT, "");
+  out = out.replace(VOID_ELEMENT, "");
 
   // イベントハンドラ。HTML パーサは `/` も属性区切りとして扱うので
   // 区切りを [\s/] にする。空白しか見ていないと `<circle/onload=...>` が通る。
-  out = out.replace(/[\s/]on[a-z]+\s*=\s*"[^"]*"/gi, " ");
-  out = out.replace(/[\s/]on[a-z]+\s*=\s*'[^']*'/gi, " ");
-  out = out.replace(/[\s/]on[a-z]+\s*=\s*[^\s>]+/gi, " ");
+  out = out.replace(ON_ATTR_DQUOTED, " ");
+  out = out.replace(ON_ATTR_SQUOTED, " ");
+  out = out.replace(ON_ATTR_BARE, " ");
 
   return out;
 }
@@ -99,7 +134,7 @@ export function sanitizeSvg(input: string): string {
   if (!/^<svg[\s>]/i.test(result)) {
     throw new SvgValidationError("Nothing left after sanitizing");
   }
-  if (/<script\b|\son[a-z]+\s*=|javascript:/i.test(decodeEntities(result))) {
+  if (UNSAFE_RESIDUE.test(decodeEntities(result))) {
     throw new SvgValidationError("Unsafe markup could not be removed");
   }
 
