@@ -1,5 +1,6 @@
 import { useState } from "hono/jsx";
 import { apiFetch } from "../lib/api-fetch";
+import { addTag as addTagTo, removeTag as removeTagFrom } from "../lib/tags";
 
 interface Props {
   repoId: number;
@@ -27,20 +28,18 @@ export default function TagEditor({ repoId, initialTags, onTagsChange }: Props) 
   };
 
   const addTag = async () => {
-    const tag = input.trim().toLowerCase();
-    if (!tag || tagsState.includes(tag)) {
-      setInput("");
+    const newTags = addTagTo(tagsState, input);
+    setInput("");
+    if (!newTags) {
       return;
     }
-    const newTags = [...tagsState, tag];
     setTags(newTags);
-    setInput("");
     onTagsChange?.(repoId, newTags);
     await saveTags(newTags);
   };
 
   const removeTag = async (tag: string) => {
-    const newTags = tagsState.filter((t) => t !== tag);
+    const newTags = removeTagFrom(tagsState, tag);
     setTags(newTags);
     onTagsChange?.(repoId, newTags);
     await saveTags(newTags);
