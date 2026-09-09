@@ -15,7 +15,7 @@ Chrome MCP などのブラウザ自動操作で UI を確認するとき、URL �
 
 | name | 種類 | 行き先 | 内容 |
 |---|---|---|---|
-| `empty` | props 直描画 | `/__scenarios/empty/page` | リポジトリ 0 件。カード欄なし、5 列とも No items |
+| `empty` | props 直描画 | `/__scenarios/empty/page` | リポジトリ 0 件。カード欄なし、5 列とも「まだありません」 |
 | `typical` | props 直描画 | `/__scenarios/typical/page` | 8 件。カード 2 枚 (メモ・ロゴ付き)、各列 1〜2 件、private 1 件 |
 | `large` | props 直描画 | `/__scenarios/large/page` | 60 件。カード 12 枚、各列 12 件。長い名前・長文の説明とメモ・10 個のタグ・5 桁の star 数 |
 | `visibility` | props 直描画 | `/__scenarios/visibility/page` | 公開トップに出る/出ないの境界 9 件。`shown-*` の 5 件だけ出て `hidden-*` の 4 件は出ない |

@@ -18,6 +18,7 @@ interface PatchResponse {
 
 export default function RepoEditor({ repo }: Props) {
   const [notes, setNotes] = useState(repo.notes ?? "");
+  const [savedNotes, setSavedNotes] = useState(repo.notes ?? "");
   const [star, setStar] = useState(repo.star ?? false);
   const [hide, setHide] = useState(repo.hide ?? false);
   const [coverImageKey, setCoverImageKey] = useState(repo.coverImageKey);
@@ -55,6 +56,17 @@ export default function RepoEditor({ repo }: Props) {
     }
   };
 
+  // メモは「保存」ボタンでも、欄の外をクリック (blur) でも保存できる (所見 #10)。
+  // ボタンを押すと blur → click の順で 2 回呼ばれるので、変わっていなければ送らない
+  const saveNotes = async () => {
+    if (notes === savedNotes) {
+      if (saveState === "idle") setSaveState("saved");
+      return;
+    }
+    const { ok } = await patch({ notes });
+    if (ok) setSavedNotes(notes);
+  };
+
   const saveDescription = async () => {
     if (description === savedDescription) return;
     setDescriptionError("");
@@ -64,14 +76,14 @@ export default function RepoEditor({ repo }: Props) {
       setDescriptionError(data.error ?? "保存に失敗しました");
       return;
     }
-    // DB は更新できても GitHub 側が失敗することがある。次の sync で戻るので伝える
+    // DB には入っている。GitHub 側の失敗は次の sync で戻るので、失敗一色に見せない (所見 #11)
+    setSavedDescription(description);
     if (data.githubSyncErrors?.length) {
       setDescriptionError(
-        `DBは更新しましたが GitHub に反映できませんでした: ${data.githubSyncErrors[0]}`
+        `説明文は保存しましたが、GitHub には反映できませんでした (次回の同期で再試行されます)。詳細: ${data.githubSyncErrors[0]}`
       );
       return;
     }
-    setSavedDescription(description);
     setDescriptionSaved(true);
   };
 
@@ -171,6 +183,11 @@ export default function RepoEditor({ repo }: Props) {
       </div>
 
       <div class="mb-2">
+        {/* 本文と同じ見た目だと編集できると気づけない (所見 #12) */}
+        <label class="block text-xs text-gray-400 mb-0.5">
+          説明文
+          <span class="ml-1">クリックして編集。GitHub の説明にも反映されます</span>
+        </label>
         <input
           type="text"
           value={description}
@@ -179,11 +196,13 @@ export default function RepoEditor({ repo }: Props) {
             setDescriptionError("");
           }}
           onBlur={saveDescription}
-          placeholder="Description (GitHub にも反映されます)"
-          class="w-full px-2 py-1 -mx-2 text-gray-600 bg-transparent border border-transparent rounded hover:border-gray-200 focus:border-blue-400 focus:bg-white outline-none"
+          placeholder="説明文 (GitHub にも反映されます)"
+          class="w-full px-2 py-1 -mx-2 text-gray-600 bg-transparent border border-dashed border-gray-300 rounded hover:border-gray-400 focus:border-solid focus:border-blue-400 focus:bg-white outline-none"
         />
         {descriptionError ? (
-          <p class="text-xs text-red-600 mt-1">{descriptionError}</p>
+          <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1">
+            {descriptionError}
+          </p>
         ) : (
           descriptionSaved && (
             <p class="text-xs text-gray-400 mt-1">GitHub に反映しました</p>
@@ -273,21 +292,35 @@ export default function RepoEditor({ repo }: Props) {
             setNotes((e.target as HTMLTextAreaElement).value);
             setSaveState("idle");
           }}
-          onBlur={() => patch({ notes })}
+          onBlur={saveNotes}
           rows={10}
           placeholder={"- [ ] TODO\n- メモ"}
           class="w-full px-3 py-2 border rounded font-mono text-sm outline-none focus:border-blue-400"
         />
-        <div class="flex items-center justify-between mt-1">
+        <div class="flex items-center justify-between gap-3 mt-1">
           <span class="text-xs text-gray-400">
-            フォーカスを外すと保存されます
+            欄の外をクリックしても保存されます
           </span>
-          <span class="text-xs text-gray-500">
-            {saveState === "saving" && "Saving..."}
-            {saveState === "saved" && "Saved"}
-            {saveState === "error" && (
-              <span class="text-red-600">保存に失敗しました</span>
-            )}
+          <span class="flex items-center gap-3">
+            <span class="text-sm" role="status" aria-live="polite">
+              {saveState === "saving" && (
+                <span class="text-gray-500">保存中…</span>
+              )}
+              {saveState === "saved" && (
+                <span class="text-green-700">✓ 保存しました</span>
+              )}
+              {saveState === "error" && (
+                <span class="text-red-600">保存に失敗しました。もう一度お試しください</span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={saveNotes}
+              disabled={saveState === "saving"}
+              class="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700 cursor-pointer disabled:opacity-50"
+            >
+              保存
+            </button>
           </span>
         </div>
       </section>

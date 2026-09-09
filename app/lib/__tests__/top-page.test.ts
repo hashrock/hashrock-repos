@@ -1,7 +1,17 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
 import { KANBAN_COLUMNS } from "../constants";
-import { buildTopPageProps, cardHref, extraTags, type TopPageRepo } from "../top-page";
+import {
+  buildTopPageProps,
+  cardHref,
+  cardLinkLabel,
+  countVisibleRepos,
+  extraTags,
+  matchesQuery,
+  searchText,
+  COLUMN_LABELS,
+  type TopPageRepo,
+} from "../top-page";
 
 function repo(overrides: Partial<TopPageRepo> & { id: number }): TopPageRepo {
   return {
@@ -67,5 +77,94 @@ describe("cardHref", () => {
 describe("extraTags", () => {
   it("strips column names and keeps the rest in order", () => {
     expect(extraTags(["done", "web", "backlog", "cli"])).toEqual(["web", "cli"]);
+  });
+});
+
+describe("cardLinkLabel", () => {
+  it("names where the card goes, and is silent when there is no link", () => {
+    expect(cardLinkLabel(repo({ id: 1 }))).toBe("GitHub で見る");
+    expect(cardLinkLabel(repo({ id: 1, homepage: "https://x" }))).toBe("サイトを開く");
+    expect(cardLinkLabel(repo({ id: 1, isPrivate: true, homepage: "https://x" }))).toBe("サイトを開く");
+    expect(cardLinkLabel(repo({ id: 1, isPrivate: true }))).toBeNull();
+  });
+
+  it("agrees with cardHref: a label exists exactly when a link exists", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          isPrivate: fc.boolean(),
+          homepage: fc.option(fc.webUrl(), { nil: null }),
+          url: fc.webUrl(),
+        }),
+        (r) => {
+          expect(cardLinkLabel(r) === null).toBe(cardHref(r) === null);
+        }
+      )
+    );
+  });
+});
+
+describe("COLUMN_LABELS", () => {
+  it("has a Japanese label for every column", () => {
+    for (const name of KANBAN_COLUMNS) {
+      expect(COLUMN_LABELS[name]).toBeTruthy();
+    }
+  });
+});
+
+describe("searchText / matchesQuery", () => {
+  it("matches on name, description and extra tags, case-insensitively", () => {
+    const text = searchText(repo({ id: 1, name: "Gantt-CLI", description: "ターミナルで描く", tags: ["ongoing", "cli"] }));
+    expect(matchesQuery(text, "gantt")).toBe(true);
+    expect(matchesQuery(text, "ターミナル")).toBe(true);
+    expect(matchesQuery(text, "CLI")).toBe(true);
+    expect(matchesQuery(text, "ongoing")).toBe(false); // 列名は照合しない
+    expect(matchesQuery(text, "nope")).toBe(false);
+  });
+
+  it("requires every whitespace-separated term (AND)", () => {
+    const text = searchText(repo({ id: 1, name: "notes-app", description: "Markdown のメモ帳" }));
+    expect(matchesQuery(text, "notes メモ")).toBe(true);
+    expect(matchesQuery(text, "notes  \n メモ")).toBe(true);
+    expect(matchesQuery(text, "notes 帳簿")).toBe(false);
+  });
+
+  it("matches everything on an empty or blank query", () => {
+    fc.assert(
+      fc.property(fc.string(), fc.stringMatching(/^\s*$/), (hay, blank) => {
+        expect(matchesQuery(hay, blank)).toBe(true);
+      })
+    );
+  });
+
+  it("matches itself: every non-blank search text is found by any of its own words", () => {
+    fc.assert(
+      fc.property(arbRepo, (r) => {
+        const text = searchText(r);
+        for (const word of text.split(/\s+/).filter(Boolean)) {
+          expect(matchesQuery(text, word)).toBe(true);
+        }
+      })
+    );
+  });
+});
+
+describe("countVisibleRepos", () => {
+  it("counts a repo once even when it is both starred and in a column", () => {
+    const props = buildTopPageProps(
+      [repo({ id: 1, star: true, tags: ["done"] }), repo({ id: 2, tags: ["done", "backlog"] }), repo({ id: 3 })],
+      false
+    );
+    expect(countVisibleRepos(props)).toBe(2);
+  });
+
+  it("is zero exactly when nothing is starred or in a column", () => {
+    fc.assert(
+      fc.property(fc.array(arbRepo, { maxLength: 20 }), (repos) => {
+        const props = buildTopPageProps(repos, false);
+        const visible = repos.filter((r) => r.star || r.tags.some((t) => (KANBAN_COLUMNS as readonly string[]).includes(t)));
+        expect(countVisibleRepos(props)).toBe(new Set(visible.map((r) => r.id)).size);
+      })
+    );
   });
 });

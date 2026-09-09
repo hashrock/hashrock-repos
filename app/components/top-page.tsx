@@ -1,5 +1,14 @@
-import { cardHref, type TopPageProps } from "../lib/top-page"
-import { KANBAN_COLUMNS } from "../lib/constants"
+import {
+  cardHref,
+  cardLinkLabel,
+  countVisibleRepos,
+  extraTags,
+  searchText,
+  COLUMN_LABELS,
+  type TopPageProps,
+  type TopPageRepo,
+} from "../lib/top-page"
+import RepoFilter from "../islands/repo-filter"
 
 function GitHubMark() {
   return (
@@ -25,12 +34,43 @@ function PencilMark() {
   )
 }
 
+/** ロゴ画像。取得に失敗したら壊れた画像アイコンを出さずに消す (所見 #8) */
+function Logo({ repo, size }: { repo: TopPageRepo; size: 16 | 24 }) {
+  const cls = size === 24 ? "block w-6 h-6 shrink-0" : "block w-4 h-4 shrink-0"
+  return (
+    <img
+      src={`/logos/${repo.id}`}
+      alt=""
+      width={size}
+      height={size}
+      loading="lazy"
+      onerror="this.remove()"
+      class={cls}
+    />
+  )
+}
+
+/** カードの行き先を文字で示す。カード全体がリンクだと見た目で分からない (所見 #4, #5) */
+function LinkLabel({ repo, small }: { repo: TopPageRepo; small?: boolean }) {
+  const label = cardLinkLabel(repo)
+  if (!label) return null
+  return (
+    <div
+      class={`${small ? "mt-2 text-[11px]" : "mt-3 text-xs"} text-blue-600 group-hover:underline`}
+      aria-hidden="true"
+    >
+      {label} ↗
+    </div>
+  )
+}
+
 /**
  * 公開トップページ。props だけで描ける (DB もリクエストも見ない) ので、
  * 本番の route と UI テスト用シナリオの両方から使う。
  */
 export default function TopPage(props: TopPageProps) {
   const { starred, columns, signedIn } = props
+  const total = countVisibleRepos(props)
 
   const columnColors: Record<string, { bg: string; border: string; header: string }> = {
     backlog:    { bg: 'bg-gray-50',   border: 'border-gray-200',  header: 'bg-gray-200 text-gray-700' },
@@ -50,13 +90,27 @@ export default function TopPage(props: TopPageProps) {
         height={200}
         class="w-[200px] max-w-full h-auto mb-4 mx-auto"
       />
+      {/* サイトが何なのか、カードを押すとどうなるかを一言 (所見 #6) */}
+      <p class="text-center text-sm text-gray-500 mb-8">
+        hashrock が作ったもの・作りかけのものの一覧です。カードを押すと GitHub かサイトが開きます。
+      </p>
+
+      {total === 0 && (
+        // 0 件のときに空の列と管理リンクしか無いと次に何をすればいいか分からない (所見 #7)
+        <p class="mb-8 text-center text-sm text-gray-500 border border-dashed border-gray-300 rounded-lg py-8">
+          表示できるリポジトリがまだありません。
+        </p>
+      )}
+
       {starred.length > 0 && (
         <div class="mb-10">
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {starred.map((repo) => (
               <div
                 key={repo.id}
-                class="relative flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+                data-search={searchText(repo)}
+                data-repo-id={repo.id}
+                class="group relative flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-shadow overflow-hidden"
               >
                 {repo.coverImageKey && (
                   <img
@@ -66,41 +120,35 @@ export default function TopPage(props: TopPageProps) {
                     class="w-full aspect-video object-cover bg-gray-100"
                   />
                 )}
-                <div class="p-4 flex-1">
-                  <div class="flex items-center gap-2">
-                    {repo.logoSvg && (
-                      <img
-                        src={`/logos/${repo.id}`}
-                        alt=""
-                        width={24}
-                        height={24}
-                        loading="lazy"
-                        class="block w-6 h-6 shrink-0"
-                      />
-                    )}
-                    <span class="font-semibold text-gray-900">{repo.name}</span>
+                <div class="p-4 flex-1 min-w-0">
+                  {/* 右上のアイコンと名前が重ならないよう右に余白 (所見 #9) */}
+                  <div class={`flex items-center gap-2 ${signedIn ? 'pr-20' : 'pr-10'}`}>
+                    {repo.logoSvg && <Logo repo={repo} size={24} />}
+                    <span class="font-semibold text-gray-900 break-words min-w-0 group-hover:text-blue-700">
+                      {repo.name}
+                    </span>
                   </div>
                   {repo.description && (
-                    <div class="text-sm text-gray-500 mt-1">
+                    <div class="text-sm text-gray-500 mt-1 break-words">
                       {repo.description}
                     </div>
                   )}
                   {repo.notes && (
-                    <div class="text-xs text-gray-600 mt-3 whitespace-pre-wrap border-t border-gray-100 pt-3">
+                    // 空白の無い長い URL でも枠を越えない (所見 #1)
+                    <div class="text-xs text-gray-600 mt-3 whitespace-pre-wrap wrap-anywhere border-t border-gray-100 pt-3">
                       {repo.notes}
                     </div>
                   )}
-                  {repo.tags.filter((t) => !(KANBAN_COLUMNS as readonly string[]).includes(t)).length > 0 && (
+                  {extraTags(repo.tags).length > 0 && (
                     <div class="flex gap-1 mt-3 flex-wrap">
-                      {repo.tags
-                        .filter((t) => !(KANBAN_COLUMNS as readonly string[]).includes(t))
-                        .map((tag) => (
-                          <span key={tag} class="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full">
-                            {tag}
-                          </span>
-                        ))}
+                      {extraTags(repo.tags).map((tag) => (
+                        <span key={tag} class="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full">
+                          {tag}
+                        </span>
+                      ))}
                     </div>
                   )}
+                  <LinkLabel repo={repo} />
                 </div>
 
                 {/*
@@ -113,25 +161,25 @@ export default function TopPage(props: TopPageProps) {
                     target="_blank"
                     rel="noopener noreferrer"
                     class="absolute inset-0"
-                    aria-label={repo.name}
+                    aria-label={`${repo.name} (${cardLinkLabel(repo)})`}
                   />
                 )}
-                {/* オーバーレイより前面に置くアイコン群 */}
+                {/* オーバーレイより前面に置くアイコン群。指で押せる大きさにする (所見 #13) */}
                 <div class="absolute top-2 right-2 z-10 flex items-center gap-1">
                   {signedIn && (
                     <a
                       href={`/admin/repos/${repo.id}`}
                       aria-label={`${repo.name} を編集`}
                       title="編集"
-                      class="p-1.5 rounded-full bg-white/90 text-gray-400 hover:text-blue-600 shadow-sm"
+                      class="p-2.5 rounded-full bg-white/90 text-gray-400 hover:text-blue-600 shadow-sm"
                     >
                       <PencilMark />
                     </a>
                   )}
                   {repo.isPrivate ? (
                     <span
-                      title="Private repository"
-                      class="p-1.5 rounded-full bg-white/90 text-gray-400 shadow-sm"
+                      title="非公開リポジトリ"
+                      class="p-2.5 rounded-full bg-white/90 text-gray-400 shadow-sm"
                     >
                       <LockMark />
                     </span>
@@ -141,9 +189,9 @@ export default function TopPage(props: TopPageProps) {
                         href={repo.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        aria-label={`${repo.name} on GitHub`}
-                        title="GitHub"
-                        class="p-1.5 rounded-full bg-white/90 text-gray-400 hover:text-gray-900 shadow-sm"
+                        aria-label={`${repo.name} を GitHub で見る`}
+                        title="GitHub で見る"
+                        class="p-2.5 rounded-full bg-white/90 text-gray-400 hover:text-gray-900 shadow-sm"
                       >
                         <GitHubMark />
                       </a>
@@ -156,43 +204,47 @@ export default function TopPage(props: TopPageProps) {
         </div>
       )}
 
-      <div class="mb-6">
+      <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 class="text-2xl sm:text-3xl font-bold">Projects</h1>
+        {total > 0 && <RepoFilter total={total} />}
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {columns.map((col) => {
           const colors = columnColors[col.name]
           return (
-            <div key={col.name} class={`rounded-lg ${colors.border} border`}>
+            <div key={col.name} data-column={col.name} class={`rounded-lg ${colors.border} border`}>
               <div class={`px-3 py-2 rounded-t-lg ${colors.header} font-semibold text-sm flex items-center justify-between`}>
-                <span class="capitalize">{col.name}</span>
+                <span>
+                  <span class="capitalize">{col.name}</span>
+                  <span class="ml-1.5 text-xs font-normal opacity-70">{COLUMN_LABELS[col.name]}</span>
+                </span>
                 <span class="text-xs opacity-70">{col.repos.length}</span>
               </div>
-              <div class={`p-2 space-y-2 ${colors.bg} rounded-b-lg min-h-[200px]`}>
+              {/* スマホの 1 列表示では空の列に 200px の余白を残さない (所見 #14) */}
+              <div class={`p-2 space-y-2 ${colors.bg} rounded-b-lg sm:min-h-[200px]`}>
                 {col.repos.map((repo) => (
                   <div
                     key={repo.id}
-                    class="relative p-3 bg-white rounded border border-gray-100 shadow-sm hover:shadow transition-shadow"
+                    data-search={searchText(repo)}
+                    data-repo-id={repo.id}
+                    class="group relative p-3 bg-white rounded border border-gray-100 shadow-sm hover:shadow hover:border-blue-300 transition-shadow"
                   >
-                    <div class={`flex items-center gap-1.5 ${signedIn ? 'pr-12' : 'pr-6'}`}>
-                      {repo.logoSvg && (
-                        <img
-                          src={`/logos/${repo.id}`}
-                          alt=""
-                          width={16}
-                          height={16}
-                          loading="lazy"
-                          class="block w-4 h-4 shrink-0"
-                        />
-                      )}
-                      <span class="font-medium text-sm text-gray-900">{repo.name}</span>
+                    <div class={`flex items-center gap-1.5 ${signedIn ? 'pr-14' : 'pr-7'}`}>
+                      {repo.logoSvg && <Logo repo={repo} size={16} />}
+                      <span class="font-medium text-sm text-gray-900 break-words min-w-0 group-hover:text-blue-700">
+                        {repo.name}
+                      </span>
                     </div>
                     {repo.description && (
-                      <div class="text-xs text-gray-500 mt-1 line-clamp-2">{repo.description}</div>
+                      <div class="text-xs text-gray-500 mt-1 line-clamp-2 break-words">{repo.description}</div>
                     )}
                     {repo.notes && (
-                      <div class="text-xs text-gray-600 mt-2 whitespace-pre-wrap border-t border-gray-100 pt-2">
+                      // 一覧では説明と同じく数行で止める。全文は星付きカードで読める (所見 #1, #3)
+                      <div
+                        class="text-xs text-gray-600 mt-2 whitespace-pre-wrap wrap-anywhere line-clamp-4 border-t border-gray-100 pt-2"
+                        title={repo.notes}
+                      >
                         {repo.notes}
                       </div>
                     )}
@@ -206,17 +258,16 @@ export default function TopPage(props: TopPageProps) {
                         <span class="text-xs text-gray-400">★ {repo.starCount}</span>
                       )}
                     </div>
-                    {repo.tags.filter((t) => !(KANBAN_COLUMNS as readonly string[]).includes(t)).length > 0 && (
+                    {extraTags(repo.tags).length > 0 && (
                       <div class="flex gap-1 mt-2 flex-wrap">
-                        {repo.tags
-                          .filter((t) => !(KANBAN_COLUMNS as readonly string[]).includes(t))
-                          .map((tag) => (
-                            <span key={tag} class="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full">
-                              {tag}
-                            </span>
-                          ))}
+                        {extraTags(repo.tags).map((tag) => (
+                          <span key={tag} class="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full">
+                            {tag}
+                          </span>
+                        ))}
                       </div>
                     )}
+                    <LinkLabel repo={repo} small />
 
                     {cardHref(repo) && (
                       <a
@@ -224,22 +275,22 @@ export default function TopPage(props: TopPageProps) {
                         target="_blank"
                         rel="noopener noreferrer"
                         class="absolute inset-0"
-                        aria-label={repo.name}
+                        aria-label={`${repo.name} (${cardLinkLabel(repo)})`}
                       />
                     )}
-                    <div class="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+                    <div class="absolute top-1 right-1 z-10 flex items-center">
                       {signedIn && (
                         <a
                           href={`/admin/repos/${repo.id}`}
                           aria-label={`${repo.name} を編集`}
                           title="編集"
-                          class="text-gray-300 hover:text-blue-600"
+                          class="p-2 text-gray-300 hover:text-blue-600"
                         >
                           <PencilMark />
                         </a>
                       )}
                       {repo.isPrivate ? (
-                        <span title="Private repository" class="text-gray-300">
+                        <span title="非公開リポジトリ" class="p-2 text-gray-300">
                           <LockMark />
                         </span>
                       ) : (
@@ -248,9 +299,9 @@ export default function TopPage(props: TopPageProps) {
                             href={repo.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            aria-label={`${repo.name} on GitHub`}
-                            title="GitHub"
-                            class="text-gray-300 hover:text-gray-900"
+                            aria-label={`${repo.name} を GitHub で見る`}
+                            title="GitHub で見る"
+                            class="p-2 text-gray-300 hover:text-gray-900"
                           >
                             <GitHubMark />
                           </a>
@@ -260,15 +311,21 @@ export default function TopPage(props: TopPageProps) {
                   </div>
                 ))}
                 {col.repos.length === 0 && (
-                  <div class="text-xs text-gray-400 text-center py-8">No items</div>
+                  <div class="text-xs text-gray-400 text-center py-8">まだありません</div>
                 )}
+                <div data-column-no-match hidden class="text-xs text-gray-400 text-center py-8">
+                  一致するものはありません
+                </div>
               </div>
             </div>
           )
         })}
       </div>
       <div class="mt-12 text-center">
-        <a href="/admin/repos" class="text-xs text-gray-400 hover:text-gray-600">Admin</a>
+        {/* 訪問者が「次にやること」と誤解しないよう、管理者向けだと分かる文言にする (所見 #7) */}
+        <a href="/admin/repos" class="text-xs text-gray-400 hover:text-gray-600">
+          {signedIn ? '管理画面' : '管理者ログイン'}
+        </a>
       </div>
     </div>
   )
