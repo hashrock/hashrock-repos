@@ -1,4 +1,4 @@
-import type { RepoSeed, Scenario } from "./types";
+import type { PropsScenario, RepoSeed } from "./types";
 import { LOGO_SVG, daysAgo } from "./fixtures";
 
 const seeds: RepoSeed[] = [
@@ -80,10 +80,9 @@ const seeds: RepoSeed[] = [
 ];
 
 /** ふつうの利用状態。starred カードが 2 枚、各列に 1〜2 件 */
-export const typical: Scenario = {
+export const typical: PropsScenario = {
+  kind: "props",
   name: "typical",
   description: "数件のリポジトリがある通常のトップページ。カード 2 枚 (メモ・ロゴ付き) と各列 1〜2 件、private が 1 件",
-  requiresAdmin: false,
   seeds: () => seeds,
-  target: ({ scope }) => `/?scenario=${scope}`,
 };

@@ -1,4 +1,4 @@
-import type { RepoSeed, Scenario } from "./types";
+import type { DbScenario, RepoSeed } from "./types";
 import { LOGO_SVG, daysAgo } from "./fixtures";
 
 /** 個別編集ページ。全部の欄が埋まった 1 件を開く */
@@ -19,10 +19,10 @@ const seeds: RepoSeed[] = [
   },
 ];
 
-export const adminEdit: Scenario = {
+export const adminEdit: DbScenario = {
+  kind: "db",
   name: "admin-edit",
   description: "個別編集ページ (/admin/repos/:id)。全項目が埋まった 1 件を開く。保存すると GitHub 同期は失敗する (架空の owner のため) が DB には入る",
-  requiresAdmin: true,
   seeds: () => seeds,
   target: ({ repos }) => `/admin/repos/${repos[0].id}`,
 };

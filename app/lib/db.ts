@@ -4,7 +4,6 @@ import { repositories, tags, repositoryTags } from "../db/schema";
 import { KANBAN_COLUMNS } from "./constants";
 import { normalizeTagList } from "./tags";
 import { planRepoSync } from "./repo-sync-plan";
-import { isScenarioFullName } from "./scenario-scope";
 import type { GitHubRepo } from "./github";
 
 function getDb(d1: D1Database) {
@@ -145,6 +144,37 @@ export async function insertRepo(d1: D1Database, repo: GitHubRepo) {
   return inserted;
 }
 
+/**
+ * full_name が prefix で始まる行をタグの紐付けごと消す。
+ *
+ * UI テスト用シナリオが `scenario-<name>-<rand>/` 配下に撒いた行の片付け用。
+ * 空の prefix は全消しになるので受け付けない。LIKE ではなく JS の前方一致で
+ * 選ぶのは、% や _ のエスケープを持ち込まないため (数百行規模)。
+ */
+export async function deleteReposByFullNamePrefix(
+  d1: D1Database,
+  prefix: string
+): Promise<{ deleted: number }> {
+  if (!prefix) {
+    throw new Error("prefix must not be empty");
+  }
+  const db = getDb(d1);
+  const rows = await db
+    .select({ id: repositories.id, fullName: repositories.fullName })
+    .from(repositories)
+    .all();
+  const ids = rows.filter((r) => r.fullName.startsWith(prefix)).map((r) => r.id);
+
+  // D1 の 100 パラメータ制限に合わせてチャンク削除。FK に cascade がないので先に repositoryTags を消す
+  const CHUNK_SIZE = 80;
+  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + CHUNK_SIZE);
+    await db.delete(repositoryTags).where(inArray(repositoryTags.repositoryId, chunk));
+    await db.delete(repositories).where(inArray(repositories.id, chunk));
+  }
+  return { deleted: ids.length };
+}
+
 export interface ListReposOptions {
   /**
    * private リポジトリを含めるか。トップページは未認証で見られるため、
@@ -157,16 +187,6 @@ export interface ListReposOptions {
   includeArchived?: boolean;
   /** star が立っているリポジトリだけに絞るか */
   starredOnly?: boolean;
-  /**
-   * full_name がこの文字列で始まるものだけに絞る。UI テスト用シナリオが
-   * 作った `scenario-<name>-<rand>/` 配下だけを見せるために使う。
-   * 絞り込みは狭める方向にしか働かないので、未認証のトップページで受けても
-   * 非公開データが増えて見えることはない。
-   *
-   * 指定しないときはシナリオの行を **除外** する。シナリオは本番でも叩ける
-   * ので、公開トップや /api/starred にその行が混ざらないようにするため。
-   */
-  fullNamePrefix?: string;
 }
 
 export async function listRepos(
@@ -190,19 +210,10 @@ export async function listRepos(
   }
 
   const query = db.select().from(repositories);
-  const fetched = await (conditions.length > 0
+  const allRepos = await (conditions.length > 0
     ? query.where(and(...conditions))
     : query
   ).all();
-
-  // 数百行規模なので DB 側で LIKE を組まず、ここで前方一致に絞る。
-  // LIKE のワイルドカード (% _) のエスケープを持ち込まないため。
-  // scope が無い通常の一覧からはシナリオの行を外す (scenario-scope.ts 参照)
-  const prefix = options.fullNamePrefix;
-  const allRepos =
-    prefix === undefined
-      ? fetched.filter((r) => !isScenarioFullName(r.fullName))
-      : fetched.filter((r) => r.fullName.startsWith(prefix));
 
   if (allRepos.length === 0) {
     return [];

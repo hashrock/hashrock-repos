@@ -1,4 +1,4 @@
-import type { RepoSeed, Scenario } from "./types";
+import type { PropsScenario, RepoSeed } from "./types";
 import { daysAgo } from "./fixtures";
 
 /**
@@ -69,10 +69,9 @@ const seeds: RepoSeed[] = [
   },
 ];
 
-export const visibility: Scenario = {
+export const visibility: PropsScenario = {
+  kind: "props",
   name: "visibility",
   description: "公開トップに出る/出ないの境界。出るのは shown-* の 5 件だけ、hidden-* の 4 件は出ない",
-  requiresAdmin: false,
   seeds: () => seeds,
-  target: ({ scope }) => `/?scenario=${scope}`,
 };

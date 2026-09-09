@@ -1,4 +1,5 @@
-import type { RepoSeed, Scenario } from "./types";
+import AdminReposPage from "../components/admin-repos-page";
+import type { DbScenario, RepoSeed } from "./types";
 import { daysAgo } from "./fixtures";
 
 /** 管理画面の一覧。絞り込み (タグ無し / archived / hidden) と並び替えの材料を揃える */
@@ -13,10 +14,15 @@ const seeds: RepoSeed[] = [
   { name: "hotel", description: "star 付き", star: true, tags: ["done"], starCount: 15, updatedAt: daysAgo(2), createdAt: daysAgo(20) },
 ];
 
-export const adminList: Scenario = {
+/**
+ * 一覧の島 (RepoList) は行の id で API を叩くので、本物の行が要る。
+ * 撒いた分だけを見せるページは本番 route ではなく /__scenarios 配下に置く。
+ */
+export const adminList: DbScenario = {
+  kind: "db",
   name: "admin-list",
-  description: "管理画面の一覧 (/admin/repos)。archived・hidden・タグ無し・private を含む 8 件で絞り込みと並び替えを試す",
-  requiresAdmin: true,
+  description: "管理画面の一覧 (RepoList)。archived・hidden・タグ無し・private を含む 8 件で絞り込みと並び替えを試す。撒いた分だけを見せる",
   seeds: () => seeds,
-  target: ({ scope }) => `/admin/repos?scenario=${scope}`,
+  target: ({ scope }) => `/__scenarios/admin-list/page?scope=${scope}`,
+  page: (repos) => <AdminReposPage repos={repos} />,
 };

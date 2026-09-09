@@ -1,5 +1,5 @@
 import { KANBAN_COLUMNS } from "../lib/constants";
-import type { RepoSeed, Scenario } from "./types";
+import type { PropsScenario, RepoSeed } from "./types";
 import { LOGO_SVG, daysAgo } from "./fixtures";
 
 const LONG_DESCRIPTION =
@@ -54,10 +54,9 @@ function build(): RepoSeed[] {
 }
 
 /** 件数が多く、長文・長い名前・大量のタグが混ざる状態 */
-export const large: Scenario = {
+export const large: PropsScenario = {
+  kind: "props",
   name: "large",
   description: "60 件 (カード 12 枚、各列 12 件)。長い名前・長文の説明とメモ・10 個のタグ・5 桁の star 数でレイアウト崩れを見る",
-  requiresAdmin: false,
   seeds: build,
-  target: ({ scope }) => `/?scenario=${scope}`,
 };
