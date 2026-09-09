@@ -121,15 +121,58 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
   }
 
   for (const repo of plan.inserts) {
-    const inserted = await db
-      .insert(repositories)
-      .values(githubColumns(repo))
-      .returning()
-      .get();
-    await syncTopics(db, inserted.id, repo);
+    await insertRepo(d1, repo);
   }
 
   return { synced: repos.length, deleted: plan.deleteIds.length };
+}
+
+/**
+ * 1 件だけ挿入する。突き合わせも削除もしない。
+ *
+ * sync の挿入と、UI テスト用シナリオの種まきが共用する。シナリオは
+ * 既存行に触れずに足すだけなので、全体を突き合わせる syncRepos は使えない。
+ */
+export async function insertRepo(d1: D1Database, repo: GitHubRepo) {
+  const db = getDb(d1);
+  const inserted = await db
+    .insert(repositories)
+    .values(githubColumns(repo))
+    .returning()
+    .get();
+  await syncTopics(db, inserted.id, repo);
+  return inserted;
+}
+
+/**
+ * full_name が prefix で始まる行をタグの紐付けごと消す。
+ *
+ * UI テスト用シナリオが `scenario-<name>-<rand>/` 配下に撒いた行の片付け用。
+ * 空の prefix は全消しになるので受け付けない。LIKE ではなく JS の前方一致で
+ * 選ぶのは、% や _ のエスケープを持ち込まないため (数百行規模)。
+ */
+export async function deleteReposByFullNamePrefix(
+  d1: D1Database,
+  prefix: string
+): Promise<{ deleted: number }> {
+  if (!prefix) {
+    throw new Error("prefix must not be empty");
+  }
+  const db = getDb(d1);
+  const rows = await db
+    .select({ id: repositories.id, fullName: repositories.fullName })
+    .from(repositories)
+    .all();
+  const ids = rows.filter((r) => r.fullName.startsWith(prefix)).map((r) => r.id);
+
+  // D1 の 100 パラメータ制限に合わせてチャンク削除。FK に cascade がないので先に repositoryTags を消す
+  const CHUNK_SIZE = 80;
+  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + CHUNK_SIZE);
+    await db.delete(repositoryTags).where(inArray(repositoryTags.repositoryId, chunk));
+    await db.delete(repositories).where(inArray(repositories.id, chunk));
+  }
+  return { deleted: ids.length };
 }
 
 export interface ListReposOptions {
