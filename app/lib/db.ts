@@ -4,6 +4,7 @@ import { repositories, tags, repositoryTags } from "../db/schema";
 import { KANBAN_COLUMNS } from "./constants";
 import { normalizeTagList } from "./tags";
 import { planRepoSync } from "./repo-sync-plan";
+import { isScenarioFullName } from "./scenario-scope";
 import type { GitHubRepo } from "./github";
 
 function getDb(d1: D1Database) {
@@ -121,15 +122,27 @@ export async function syncRepos(d1: D1Database, repos: GitHubRepo[]) {
   }
 
   for (const repo of plan.inserts) {
-    const inserted = await db
-      .insert(repositories)
-      .values(githubColumns(repo))
-      .returning()
-      .get();
-    await syncTopics(db, inserted.id, repo);
+    await insertRepo(d1, repo);
   }
 
   return { synced: repos.length, deleted: plan.deleteIds.length };
+}
+
+/**
+ * 1 件だけ挿入する。突き合わせも削除もしない。
+ *
+ * sync の挿入と、UI テスト用シナリオの種まきが共用する。シナリオは
+ * 既存行に触れずに足すだけなので、全体を突き合わせる syncRepos は使えない。
+ */
+export async function insertRepo(d1: D1Database, repo: GitHubRepo) {
+  const db = getDb(d1);
+  const inserted = await db
+    .insert(repositories)
+    .values(githubColumns(repo))
+    .returning()
+    .get();
+  await syncTopics(db, inserted.id, repo);
+  return inserted;
 }
 
 export interface ListReposOptions {
@@ -144,6 +157,16 @@ export interface ListReposOptions {
   includeArchived?: boolean;
   /** star が立っているリポジトリだけに絞るか */
   starredOnly?: boolean;
+  /**
+   * full_name がこの文字列で始まるものだけに絞る。UI テスト用シナリオが
+   * 作った `scenario-<name>-<rand>/` 配下だけを見せるために使う。
+   * 絞り込みは狭める方向にしか働かないので、未認証のトップページで受けても
+   * 非公開データが増えて見えることはない。
+   *
+   * 指定しないときはシナリオの行を **除外** する。シナリオは本番でも叩ける
+   * ので、公開トップや /api/starred にその行が混ざらないようにするため。
+   */
+  fullNamePrefix?: string;
 }
 
 export async function listRepos(
@@ -167,10 +190,19 @@ export async function listRepos(
   }
 
   const query = db.select().from(repositories);
-  const allRepos = await (conditions.length > 0
+  const fetched = await (conditions.length > 0
     ? query.where(and(...conditions))
     : query
   ).all();
+
+  // 数百行規模なので DB 側で LIKE を組まず、ここで前方一致に絞る。
+  // LIKE のワイルドカード (% _) のエスケープを持ち込まないため。
+  // scope が無い通常の一覧からはシナリオの行を外す (scenario-scope.ts 参照)
+  const prefix = options.fullNamePrefix;
+  const allRepos =
+    prefix === undefined
+      ? fetched.filter((r) => !isScenarioFullName(r.fullName))
+      : fetched.filter((r) => r.fullName.startsWith(prefix));
 
   if (allRepos.length === 0) {
     return [];

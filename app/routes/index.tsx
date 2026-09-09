@@ -1,6 +1,8 @@
 import { createRoute } from 'honox/factory'
 import { listRepos } from '../lib/db'
 import { KANBAN_COLUMNS } from '../lib/constants'
+import { hasAccessSession } from '../lib/access'
+import { SCENARIO_QUERY, scopeFilterFromQuery } from '../lib/scenario-scope'
 
 function GitHubMark() {
   return (
@@ -41,24 +43,20 @@ function PencilMark() {
   )
 }
 
-/**
- * CF Access のセッション Cookie があるか。トップページは Access の外なので
- * これは「管理者本人らしい」という UI 上のヒントでしかない。表示を出し分ける
- * のは /admin へのリンクだけで、非公開データの出し分けには使わないこと。
- */
-function hasAccessSession(cookieHeader: string | undefined): boolean {
-  return /(?:^|;\s*)CF_Authorization=/.test(cookieHeader ?? '')
-}
-
 export default createRoute(async (c) => {
+  // UI テスト用シナリオ (/__scenarios) が作ったデータだけを見るための絞り込み。
+  // 狭める方向にしか働かないので、未認証で受けても非公開データは増えない
+  const fullNamePrefix = scopeFilterFromQuery(c.req.query(SCENARIO_QUERY))
+
   // カンバンは private も含める。ただし列に並ぶのは backlog/ongoing などの
   // タグが付いたものだけなので、タグの無い private は結局どこにも出ない。
   // star したものは「公開してよい」の意思表示として private でもカードに出す。
   // hide と archived が立っていればカンバンからもカードからも外れる。
-  const allRepos = await listRepos(c.env.DB, { includePrivate: true })
+  const allRepos = await listRepos(c.env.DB, { includePrivate: true, fullNamePrefix })
   const starred = await listRepos(c.env.DB, {
     includePrivate: true,
     starredOnly: true,
+    fullNamePrefix,
   })
 
   const signedIn = hasAccessSession(c.req.header('cookie'))

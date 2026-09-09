@@ -3,12 +3,15 @@ import { listRepos } from "../../../lib/db";
 import SyncButton from "../../../islands/sync-button";
 import RepoList from "../../../islands/repo-list";
 import AdminNav from "../../../components/admin-nav";
+import { SCENARIO_QUERY, scopeFilterFromQuery } from "../../../lib/scenario-scope";
 
 export default createRoute(async (c) => {
   const repos = await listRepos(c.env.DB, {
     includePrivate: true,
     includeHidden: true,
     includeArchived: true,
+    // UI テスト用シナリオが作った分だけに絞る。無ければ全件
+    fullNamePrefix: scopeFilterFromQuery(c.req.query(SCENARIO_QUERY)),
   });
 
   return c.render(
