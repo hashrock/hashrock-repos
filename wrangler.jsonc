@@ -36,7 +36,7 @@
 	// url が null のものは本番 URL が未記入 (取得せず「URL 未設定」と表示)。
 	// Bearer トークンは secret の STATS_TOKEN (wrangler secret put STATS_TOKEN)。
 	"vars": {
-		"STATS_SOURCES": "[{\"name\":\"edane\",\"url\":\"https://edane.hashrock.info\"},{\"name\":\"ganttpad-cf\",\"url\":\"https://ganttpad.app\"},{\"name\":\"grid24\",\"url\":\"https://grid.hashrock.info\"},{\"name\":\"jam\",\"url\":\"https://jam.hashrock.info\"},{\"name\":\"nansuka\",\"url\":\"https://nansuka.hashrock.info\"},{\"name\":\"yoyaku-lite-v2\",\"url\":null},{\"name\":\"homupe\",\"url\":\"https://homupe.dev\"}]"
+		"STATS_SOURCES": "[{\"name\":\"edane\",\"url\":\"https://edane.hashrock.info\"},{\"name\":\"ganttpad-cf\",\"url\":\"https://ganttpad.app\"},{\"name\":\"grid24\",\"url\":\"https://grid.hashrock.info\"},{\"name\":\"jam\",\"url\":\"https://jam.hashrock.info\"},{\"name\":\"nansuka\",\"url\":\"https://nansuka.hashrock.info\"},{\"name\":\"homupe\",\"url\":\"https://homupe.dev\"}]"
 	},
 	// 毎日 UTC 0 時にサインアップ数のスナップショットを取る (app/server.ts の scheduled)
 	"triggers": {
