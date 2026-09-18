@@ -5,6 +5,8 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "skipLibCheck": true,
+    // app/switcher/v1.js はビルドせず配る素の JS。// @ts-check で型を見る
+    "allowJs": true,
     "lib": [
       "ESNext",
       "DOM"
