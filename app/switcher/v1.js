@@ -670,6 +670,19 @@ function defineElement() {
       menu.addEventListener("click", (event) => guard(() => this.onMenuClick(event)));
       menu.addEventListener("beforetoggle", (event) => guard(() => this.onBeforeToggle(/** @type {ToggleEvent} */ (event))));
       menu.addEventListener("toggle", (event) => guard(() => this.onToggle(/** @type {ToggleEvent} */ (event))));
+
+      // 部品の中 (ボタンとメニュー) で押したキーをホストのページへバブルさせない。
+      // Shadow DOM の外から見ると target が <hashrock-switcher> に付け替わるので、
+      // ホスト側の「入力欄にフォーカスがあるか」の判定をすり抜け、Backspace で
+      // 選択中の図形が消える、1 文字のショートカットが効く、といったことが起きる。
+      // shadow root のバブルで止めるので、上のボタンとメニューのキー処理は先に動く。
+      // stopPropagation は既定の動作を止めないので、Enter / Space でのリンクやボタンの
+      // 操作、Tab でのフォーカス移動、ブラウザによる Esc の light dismiss はそのまま効く。
+      // 限界: window / document に capture フェーズ ({ capture: true }) で張った
+      // リスナーには、ここより先に届くので止められない。そういうホストは
+      // event.composedPath()[0] か、target が <hashrock-switcher> かどうかで見分けること。
+      const isolate = (/** @type {Event} */ event) => event.stopPropagation();
+      for (const type of ["keydown", "keyup", "keypress"]) root.addEventListener(type, isolate);
     }
 
     connectedCallback() {
@@ -753,6 +766,10 @@ function defineElement() {
           this.focusItem(-1);
           break;
         case "Tab":
+          this.menu.hidePopover();
+          break;
+        case "Escape":
+          // ブラウザの light dismiss でも閉じるが、それに頼らず自分で閉じる
           this.menu.hidePopover();
           break;
         default:
