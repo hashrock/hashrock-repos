@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect } from "vitest";
 import { ALL_PROJECTS_URL, TAG_NAME, renderMenuContent } from "../v1.js";
 
 const items = [
@@ -96,5 +96,145 @@ describe("<hashrock-switcher>", () => {
     const button = host.shadowRoot!.querySelector("button")!;
     expect(() => button.dispatchEvent(new Event("focus"))).not.toThrow();
     await new Promise((r) => setTimeout(r, 0));
+  });
+});
+
+/**
+ * happy-dom には Popover API が無いので、部品が使う分だけ差し込む。
+ * ブラウザの light dismiss (外側クリック・Esc) は真似しない。
+ */
+function installPopover() {
+  const proto = HTMLElement.prototype as any;
+  const open = new WeakSet<HTMLElement>();
+  const originalMatches = proto.matches;
+  const toggle = (el: HTMLElement, newState: "open" | "closed") => {
+    el.dispatchEvent(Object.assign(new Event("beforetoggle"), { newState }));
+    if (newState === "open") open.add(el);
+    else open.delete(el);
+    el.dispatchEvent(Object.assign(new Event("toggle"), { newState }));
+  };
+  Object.defineProperty(proto, "popover", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.getAttribute("popover");
+    },
+  });
+  proto.showPopover = function (this: HTMLElement) {
+    if (!open.has(this)) toggle(this, "open");
+  };
+  proto.hidePopover = function (this: HTMLElement) {
+    if (open.has(this)) toggle(this, "closed");
+  };
+  proto.matches = function (this: HTMLElement, selector: string) {
+    return selector === ":popover-open" ? open.has(this) : originalMatches.call(this, selector);
+  };
+  return () => {
+    delete proto.popover;
+    delete proto.showPopover;
+    delete proto.hidePopover;
+    proto.matches = originalMatches;
+  };
+}
+
+describe("<hashrock-switcher> keyboard", () => {
+  let uninstall: () => void;
+  let host: HTMLElement;
+  let root: ShadowRoot;
+
+  beforeEach(async () => {
+    uninstall = installPopover();
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            repos: [
+              { id: 1, name: "alpha", url: "https://alpha.test/" },
+              { id: 2, name: "beta", url: "https://beta.test/" },
+            ],
+          })
+        )
+      )) as typeof fetch;
+    host = document.createElement(TAG_NAME);
+    document.body.appendChild(host);
+    root = host.shadowRoot!;
+    // フォーカスで先読みさせ、一覧が揃ってから操作する
+    root.querySelector("button")!.dispatchEvent(new Event("focus"));
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+  afterEach(() => {
+    host.remove();
+    uninstall();
+  });
+
+  const button = () => root.querySelector("button")!;
+  const menu = () => root.querySelector<HTMLElement>("[popover]")!;
+  const focusedName = () => (root.activeElement?.querySelector(".name") ?? root.activeElement)?.textContent;
+  const press = (target: Element, key: string, type = "keydown") =>
+    target.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, composed: true, cancelable: true }));
+
+  it("moves through the items with the arrow keys and closes with Esc", () => {
+    press(button(), "ArrowDown");
+    expect(menu().matches(":popover-open")).toBe(true);
+    expect(button().getAttribute("aria-expanded")).toBe("true");
+    expect(focusedName()).toBe("alpha");
+
+    press(root.activeElement!, "ArrowDown");
+    expect(focusedName()).toBe("beta");
+    press(root.activeElement!, "ArrowDown");
+    expect(focusedName()).toBe("すべてのプロジェクト →");
+    press(root.activeElement!, "ArrowDown");
+    expect(focusedName()).toBe("alpha");
+    press(root.activeElement!, "ArrowUp");
+    expect(focusedName()).toBe("すべてのプロジェクト →");
+
+    press(root.activeElement!, "Escape");
+    expect(menu().matches(":popover-open")).toBe(false);
+    expect(button().getAttribute("aria-expanded")).toBe("false");
+    expect(root.activeElement).toBe(button());
+  });
+
+  it("does not let keys pressed inside reach the host page's listeners", () => {
+    const seen: string[] = [];
+    const record = (event: Event) => seen.push(`${event.type}:${(event as KeyboardEvent).key}`);
+    const types = ["keydown", "keyup", "keypress"];
+    for (const type of types) {
+      document.addEventListener(type, record);
+      window.addEventListener(type, record);
+      host.addEventListener(type, record);
+    }
+    try {
+      for (const type of types) press(button(), "Backspace", type);
+      press(button(), "ArrowDown");
+      for (const type of types) {
+        press(root.activeElement!, "Backspace", type);
+        press(root.activeElement!, "h", type);
+      }
+      press(root.activeElement!, "ArrowDown");
+      press(root.activeElement!, "Escape");
+      expect(seen).toEqual([]);
+
+      // 部品の外で押したキーは今までどおりホストへ届く
+      press(document.body, "Backspace");
+      expect(seen).toEqual(["keydown:Backspace", "keydown:Backspace"]);
+    } finally {
+      for (const type of types) {
+        document.removeEventListener(type, record);
+        window.removeEventListener(type, record);
+        host.removeEventListener(type, record);
+      }
+    }
+  });
+
+  it("cannot hide keys from capture-phase listeners on window (known limitation)", () => {
+    const seen: string[] = [];
+    const record = (event: Event) => seen.push((event as KeyboardEvent).key);
+    window.addEventListener("keydown", record, { capture: true });
+    try {
+      press(button(), "Backspace");
+      expect(seen).toEqual(["Backspace"]);
+    } finally {
+      window.removeEventListener("keydown", record, { capture: true });
+    }
   });
 });
