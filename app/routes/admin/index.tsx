@@ -12,6 +12,10 @@ export default createRoute((c) => {
           <h2 class="text-xl font-semibold mb-2">Repositories</h2>
           <p class="text-gray-600">リポジトリの管理・同期・タグ編集</p>
         </a>
+        <a href="/admin/stats" class="block p-4 border rounded hover:bg-gray-50 transition-colors">
+          <h2 class="text-xl font-semibold mb-2">Signups</h2>
+          <p class="text-gray-600">各サービスのサインアップ数と直近 30 日の推移</p>
+        </a>
       </div>
     </div>
   )
