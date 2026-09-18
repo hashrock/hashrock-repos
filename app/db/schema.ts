@@ -46,3 +46,22 @@ export const repositoryTags = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.repositoryId, table.tagId] })]
 );
+
+/**
+ * 各サービスの /api/stats から取ったサインアップ数の日次記録。
+ * 同じ日に取り直したら上書きする (date + service が主キー)。
+ * date は taken_at の UTC 日付 (YYYY-MM-DD)。
+ */
+export const signupSnapshots = sqliteTable(
+  "signup_snapshots",
+  {
+    date: text("date").notNull(),
+    service: text("service").notNull(),
+    total: integer("total"),
+    // created_at を持たないサービスは null
+    new7d: integer("new_7d"),
+    new30d: integer("new_30d"),
+    takenAt: text("taken_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.date, table.service] })]
+);

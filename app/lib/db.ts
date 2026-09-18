@@ -1,6 +1,11 @@
 import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
-import { and, eq, inArray } from "drizzle-orm";
-import { repositories, tags, repositoryTags } from "../db/schema";
+import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
+import {
+  repositories,
+  tags,
+  repositoryTags,
+  signupSnapshots,
+} from "../db/schema";
 import { KANBAN_COLUMNS } from "./constants";
 import { normalizeTagList } from "./tags";
 import { planRepoSync } from "./repo-sync-plan";
@@ -470,4 +475,51 @@ export async function setRepoArchived(
     .set({ archived })
     .where(eq(repositories.id, repoId));
   return { repoId, archived };
+}
+
+export type SignupSnapshotInput = typeof signupSnapshots.$inferInsert;
+export type SignupSnapshotRow = typeof signupSnapshots.$inferSelect;
+
+/**
+ * サインアップ数のスナップショットを (date, service) で upsert する。
+ * 同じ日に取り直したら数値と taken_at を上書きする。
+ */
+export async function upsertSignupSnapshots(
+  d1: D1Database,
+  rows: SignupSnapshotInput[]
+): Promise<void> {
+  if (rows.length === 0) {
+    return;
+  }
+  const db = getDb(d1);
+  // 1 行 6 パラメータ。D1 の 100 パラメータ制限に合わせて分ける
+  const CHUNK_SIZE = 16;
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    await db
+      .insert(signupSnapshots)
+      .values(rows.slice(i, i + CHUNK_SIZE))
+      .onConflictDoUpdate({
+        target: [signupSnapshots.date, signupSnapshots.service],
+        set: {
+          total: sql`excluded.total`,
+          new7d: sql`excluded.new_7d`,
+          new30d: sql`excluded.new_30d`,
+          takenAt: sql`excluded.taken_at`,
+        },
+      });
+  }
+}
+
+/** sinceDate (YYYY-MM-DD) 以降のスナップショットを service, date 順で返す */
+export async function listSignupSnapshotsSince(
+  d1: D1Database,
+  sinceDate: string
+): Promise<SignupSnapshotRow[]> {
+  const db = getDb(d1);
+  return db
+    .select()
+    .from(signupSnapshots)
+    .where(gte(signupSnapshots.date, sinceDate))
+    .orderBy(asc(signupSnapshots.service), asc(signupSnapshots.date))
+    .all();
 }

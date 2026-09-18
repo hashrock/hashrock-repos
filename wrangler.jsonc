@@ -31,5 +31,15 @@
 			"database_id": "a8f5ed42-3464-4556-b33b-d958f07a130d",
 			"migrations_dir": "drizzle/migrations"
 		}
-	]
+	],
+	// サインアップ数を集めるサービス (JSON 文字列)。各サービスの GET /api/stats を叩く。
+	// url が null のものは本番 URL が未記入 (取得せず「URL 未設定」と表示)。
+	// Bearer トークンは secret の STATS_TOKEN (wrangler secret put STATS_TOKEN)。
+	"vars": {
+		"STATS_SOURCES": "[{\"name\":\"edane\",\"url\":\"https://edane.hashrock.info\"},{\"name\":\"ganttpad-cf\",\"url\":null},{\"name\":\"grid24\",\"url\":\"https://grid.hashrock.info\"},{\"name\":\"jam\",\"url\":\"https://jam.hashrock.info\"},{\"name\":\"nansuka\",\"url\":null},{\"name\":\"yoyaku-lite-v2\",\"url\":null},{\"name\":\"homupe\",\"url\":\"https://homupe.dev\"}]"
+	},
+	// 毎日 UTC 0 時にサインアップ数のスナップショットを取る (app/server.ts の scheduled)
+	"triggers": {
+		"crons": ["0 0 * * *"]
+	}
 }
