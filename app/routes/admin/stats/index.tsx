@@ -1,7 +1,6 @@
 import { createRoute } from "honox/factory";
 import { listSignupSnapshotsSince } from "../../../lib/db";
 import {
-  collectSignupStats,
   parseStatsSources,
   snapshotDate,
   type StatsSource,
@@ -13,7 +12,8 @@ import {
 } from "../../../lib/signup-stats-view";
 import AdminStatsPage from "../../../components/admin-stats-page";
 
-// 表は開くたびに取り直す (記録はしない)。折れ線は signup_snapshots から描く
+// 表も折れ線も signup_snapshots から描く。開くたびに各サービスへ取りに行くと
+// 落ちているサービスのタイムアウトを毎回待つので、収集は Cron と「今すぐ記録」に任せる
 export default createRoute(async (c) => {
   let sources: StatsSource[] = [];
   let configError: string | null = null;
@@ -24,14 +24,14 @@ export default createRoute(async (c) => {
   }
 
   const today = snapshotDate(new Date());
-  const [results, snapshots] = await Promise.all([
-    collectSignupStats(sources, { token: c.env.STATS_TOKEN }),
-    listSignupSnapshotsSince(c.env.DB, dateRange(today, STATS_CHART_DAYS)[0]),
-  ]);
+  const snapshots = await listSignupSnapshotsSince(
+    c.env.DB,
+    dateRange(today, STATS_CHART_DAYS)[0]
+  );
 
   return c.render(
     <AdminStatsPage
-      {...buildAdminStatsPageProps({ results, snapshots, today, configError })}
+      {...buildAdminStatsPageProps({ sources, snapshots, today, configError })}
     />
   );
 });

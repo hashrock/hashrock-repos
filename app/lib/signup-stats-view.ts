@@ -1,9 +1,13 @@
-import type { SignupStat } from "./signupStats";
+import type { StatsSource } from "./signupStats";
 import type { SignupSnapshotRow } from "./db";
 
 /**
  * /admin/stats の props 組み立て。描画側は受け取った値をそのまま出すだけにし、
  * 表示の規則 (欠損の見せ方・時刻の書式・折れ線の座標) はここに置く。
+ *
+ * 画面は signup_snapshots だけを見る。開くたびに各サービスへ取りに行くと
+ * 落ちているサービスのタイムアウトを毎回待つことになるので、収集は
+ * Cron と「今すぐ記録」に任せる。
  */
 
 export const STATS_CHART_DAYS = 30;
@@ -17,11 +21,16 @@ export interface StatsTableRow {
   total: string;
   new7d: string;
   new30d: string;
-  /** JST の "YYYY-MM-DD HH:mm" */
-  fetchedAt: string;
-  note: string | null;
-  error: string | null;
+  /** 最後に記録した時刻。JST の "YYYY-MM-DD HH:mm"。記録が無ければ — */
+  takenAt: string;
 }
+
+/** 表に要る列だけ。折れ線は date/service/total しか見ない */
+export type SnapshotForRow = Pick<
+  SignupSnapshotRow,
+  "date" | "service" | "total" | "new7d" | "new30d" | "takenAt"
+>;
+export type SnapshotForChart = Pick<SignupSnapshotRow, "date" | "service" | "total">;
 
 export interface ChartPoint {
   date: string;
@@ -71,17 +80,48 @@ export function formatJst(iso: string): string {
     .replace("T", " ");
 }
 
-export function buildStatsTableRows(results: SignupStat[]): StatsTableRow[] {
-  return results.map((r) => ({
-    service: r.service,
-    url: r.url,
-    total: formatCount(r.total),
-    new7d: formatCount(r.new7d),
-    new30d: formatCount(r.new30d),
-    fetchedAt: formatJst(r.fetchedAt),
-    note: r.note,
-    error: r.error,
-  }));
+/**
+ * 設定順のサービスを先に並べ、設定から外れたが記録の残るサービスを後ろに足す。
+ * 設定から消したサービスの記録を黙って落とさないため。
+ */
+export function orderServices(
+  recorded: Iterable<string>,
+  serviceOrder: string[]
+): string[] {
+  const extra = [...new Set(recorded)]
+    .filter((name) => !serviceOrder.includes(name))
+    .sort();
+  return [...serviceOrder, ...extra];
+}
+
+/** サービスごとの最後の記録。同じ日が複数あれば後から来たものを採る */
+function latestByService(snapshots: SnapshotForRow[]): Map<string, SnapshotForRow> {
+  const latest = new Map<string, SnapshotForRow>();
+  for (const s of snapshots) {
+    const cur = latest.get(s.service);
+    if (!cur || s.date >= cur.date) latest.set(s.service, s);
+  }
+  return latest;
+}
+
+/** 表は記録済みの最新行。取りに行かないので、まだ記録が無いサービスは — になる */
+export function buildLatestRows(
+  snapshots: SnapshotForRow[],
+  sources: StatsSource[]
+): StatsTableRow[] {
+  const latest = latestByService(snapshots);
+  const urls = new Map(sources.map((s) => [s.name, s.url]));
+  return orderServices(latest.keys(), sources.map((s) => s.name)).map((service) => {
+    const row = latest.get(service);
+    return {
+      service,
+      url: urls.get(service) ?? null,
+      total: formatCount(row?.total ?? null),
+      new7d: formatCount(row?.new7d ?? null),
+      new30d: formatCount(row?.new30d ?? null),
+      takenAt: row ? formatJst(row.takenAt) : EMPTY,
+    };
+  });
 }
 
 /** today (UTC の YYYY-MM-DD) で終わる days 日分の日付。古い順 */
@@ -94,12 +134,9 @@ export function dateRange(today: string, days: number): string[] {
   return dates;
 }
 
-/**
- * 設定順のサービスを先に並べ、設定から外れたが記録の残るサービスを後ろに足す。
- * 日ごとの総数を dates に揃え、記録の無い日は null。
- */
+/** 日ごとの総数を dates に揃える。記録の無い日は null。並びは orderServices と同じ */
 export function buildSeries(
-  snapshots: Pick<SignupSnapshotRow, "date" | "service" | "total">[],
+  snapshots: SnapshotForChart[],
   serviceOrder: string[],
   dates: string[]
 ): { service: string; points: ChartPoint[] }[] {
@@ -109,10 +146,7 @@ export function buildSeries(
     if (!m) byService.set(s.service, (m = new Map()));
     m.set(s.date, s.total);
   }
-  const extra = [...byService.keys()]
-    .filter((name) => !serviceOrder.includes(name))
-    .sort();
-  return [...serviceOrder, ...extra].map((service) => {
+  return orderServices(byService.keys(), serviceOrder).map((service) => {
     const m = byService.get(service);
     return {
       service,
@@ -164,21 +198,19 @@ export function chartGeometry(
 }
 
 export function buildAdminStatsPageProps(input: {
-  results: SignupStat[];
-  snapshots: Pick<SignupSnapshotRow, "date" | "service" | "total">[];
+  /** STATS_SOURCES。並び順とリンク先にだけ使う (ここでは取りに行かない) */
+  sources: StatsSource[];
+  snapshots: SnapshotForRow[];
   /** 折れ線の最終日 (UTC の YYYY-MM-DD) */
   today: string;
   configError?: string | null;
   days?: number;
 }): AdminStatsPageProps {
   const dates = dateRange(input.today, input.days ?? STATS_CHART_DAYS);
-  const series = buildSeries(
-    input.snapshots,
-    input.results.map((r) => r.service),
-    dates
-  );
+  const serviceOrder = input.sources.map((s) => s.name);
+  const series = buildSeries(input.snapshots, serviceOrder, dates);
   return {
-    rows: buildStatsTableRows(input.results),
+    rows: buildLatestRows(input.snapshots, input.sources),
     charts: series.map(({ service, points }) => {
       const recorded = points.filter((p) => p.total !== null);
       return {

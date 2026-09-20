@@ -1,7 +1,10 @@
 import { useState } from "hono/jsx";
 import { apiFetch } from "../lib/api-fetch";
 
-/** 今すぐ収集して今日のスナップショットを取り直す。成功したら再読み込み */
+/**
+ * 今すぐ収集して今日のスナップショットを取り直す。成功したら再読み込み。
+ * 画面に取得エラーの列は無いので、失敗したサービス名はここで出す。
+ */
 export default function StatsRefreshButton() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -17,12 +20,16 @@ export default function StatsRefreshButton() {
       const data = (await res.json()) as {
         saved?: number;
         failed?: number;
+        results?: { service: string; error: string | null }[];
         error?: string;
       };
       if (res.ok) {
-        const failedPart = data.failed ? `、失敗 ${data.failed} 件` : "";
+        const failed = (data.results ?? []).filter((r) => r.error !== null);
+        const failedPart = failed.length
+          ? `、失敗 ${failed.length} 件 (${failed.map((r) => r.service).join(", ")})`
+          : "";
         setMessage(`${data.saved} 件を記録しました${failedPart}`);
-        setTimeout(() => location.reload(), 1000);
+        setTimeout(() => location.reload(), failed.length ? 4000 : 1000);
       } else {
         setMessage(`Error: ${data.error}`);
       }
