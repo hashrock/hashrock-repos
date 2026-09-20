@@ -72,9 +72,10 @@ export default function AdminStatsPage(props: AdminStatsPageProps) {
         <p class="mb-4 p-3 rounded bg-red-50 text-red-700 text-sm">設定エラー: {configError}</p>
       )}
 
-      <h2 class="text-lg font-semibold mb-2">最新値</h2>
+      <h2 class="text-lg font-semibold mb-2">最新の記録</h2>
       <p class="text-sm text-gray-500 mb-2">
-        このページを開いたときに各サービスの /api/stats から取得した値です (記録はしません)。
+        記録済みのスナップショットのうち、サービスごとに一番新しい行です。今の値を見たいときは
+        「今すぐ記録」を押してください。
       </p>
       <div class="overflow-x-auto mb-10">
         <table class="w-full text-sm border-collapse">
@@ -84,14 +85,13 @@ export default function AdminStatsPage(props: AdminStatsPageProps) {
               <th class="py-2 pr-4 font-medium text-right">total</th>
               <th class="py-2 pr-4 font-medium text-right">new_7d</th>
               <th class="py-2 pr-4 font-medium text-right">new_30d</th>
-              <th class="py-2 pr-4 font-medium">取得時刻 (JST)</th>
-              <th class="py-2 font-medium">エラー</th>
+              <th class="py-2 font-medium">記録時刻 (JST)</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} class="py-4 text-center text-gray-400">
+                <td colSpan={5} class="py-4 text-center text-gray-400">
                   STATS_SOURCES にサービスがありません
                 </td>
               </tr>
@@ -106,13 +106,11 @@ export default function AdminStatsPage(props: AdminStatsPageProps) {
                   ) : (
                     row.service
                   )}
-                  {row.note && <div class="text-xs text-gray-400">{row.note}</div>}
                 </td>
                 <td class="py-2 pr-4 text-right tabular-nums">{row.total}</td>
                 <td class="py-2 pr-4 text-right tabular-nums">{row.new7d}</td>
                 <td class="py-2 pr-4 text-right tabular-nums">{row.new30d}</td>
-                <td class="py-2 pr-4 tabular-nums whitespace-nowrap">{row.fetchedAt}</td>
-                <td class="py-2 text-red-700">{row.error ?? ""}</td>
+                <td class="py-2 tabular-nums whitespace-nowrap">{row.takenAt}</td>
               </tr>
             ))}
           </tbody>
@@ -121,7 +119,7 @@ export default function AdminStatsPage(props: AdminStatsPageProps) {
 
       <h2 class="text-lg font-semibold mb-2">総数の推移 (直近 30 日)</h2>
       <p class="text-sm text-gray-500 mb-4">
-        毎日 UTC 0 時 (JST 9 時) の Cron と「今すぐ記録」で取ったスナップショットです。
+        スナップショットは毎日 UTC 0 時 (JST 9 時) の Cron と「今すぐ記録」で取ります。
       </p>
       <div class="grid gap-4 md:grid-cols-2">
         {charts.map((chart) => (

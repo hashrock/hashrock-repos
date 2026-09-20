@@ -2,35 +2,42 @@ import { describe, expect, it } from "vitest";
 import {
   CHART_HEIGHT,
   buildAdminStatsPageProps,
+  buildLatestRows,
   buildSeries,
-  buildStatsTableRows,
   chartGeometry,
   dateRange,
   formatJst,
 } from "../signup-stats-view";
-import type { SignupStat } from "../signupStats";
+import type { SnapshotForRow } from "../signup-stats-view";
+import type { StatsSource } from "../signupStats";
 
-function stat(overrides: Partial<SignupStat> = {}): SignupStat {
+function snap(overrides: Partial<SnapshotForRow> = {}): SnapshotForRow {
   return {
+    date: "2026-09-18",
     service: "grid24",
-    url: "https://grid.hashrock.info",
-    fetchedAt: "2026-09-18T00:00:03.000Z",
     total: 1234,
     new7d: 4,
     new30d: 12,
-    note: null,
-    error: null,
+    takenAt: "2026-09-18T00:00:03.000Z",
     ...overrides,
   };
 }
 
-describe("buildStatsTableRows", () => {
-  it("数は桁区切り、欠損は —、時刻は JST", () => {
-    const rows = buildStatsTableRows([
-      stat(),
-      stat({ service: "ganttpad-cf", url: null, total: 5, new7d: null, new30d: null, note: "created_at なし" }),
-      stat({ service: "jam", total: null, new7d: null, new30d: null, error: "HTTP 401" }),
-    ]);
+const SOURCES: StatsSource[] = [
+  { name: "grid24", url: "https://grid.hashrock.info" },
+  { name: "ganttpad-cf", url: null },
+];
+
+describe("buildLatestRows", () => {
+  it("サービスごとに一番新しい記録。数は桁区切り、時刻は JST", () => {
+    const rows = buildLatestRows(
+      [
+        snap({ date: "2026-09-17", total: 1200, takenAt: "2026-09-17T00:00:01.000Z" }),
+        snap(),
+        snap({ service: "ganttpad-cf", total: 80, new7d: null, new30d: null }),
+      ],
+      SOURCES
+    );
     expect(rows).toEqual([
       {
         service: "grid24",
@@ -38,30 +45,25 @@ describe("buildStatsTableRows", () => {
         total: "1,234",
         new7d: "4",
         new30d: "12",
-        fetchedAt: "2026-09-18 09:00",
-        note: null,
-        error: null,
+        takenAt: "2026-09-18 09:00",
       },
       {
         service: "ganttpad-cf",
         url: null,
-        total: "5",
+        total: "80",
         new7d: "—",
         new30d: "—",
-        fetchedAt: "2026-09-18 09:00",
-        note: "created_at なし",
-        error: null,
+        takenAt: "2026-09-18 09:00",
       },
-      {
-        service: "jam",
-        url: "https://grid.hashrock.info",
-        total: "—",
-        new7d: "—",
-        new30d: "—",
-        fetchedAt: "2026-09-18 09:00",
-        note: null,
-        error: "HTTP 401",
-      },
+    ]);
+  });
+
+  it("記録の無いサービスも行は出す。設定外の記録は後ろに足す", () => {
+    const rows = buildLatestRows([snap({ service: "old", total: 9 })], SOURCES);
+    expect(rows.map((r) => [r.service, r.total, r.takenAt])).toEqual([
+      ["grid24", "—", "—"],
+      ["ganttpad-cf", "—", "—"],
+      ["old", "9", "2026-09-18 09:00"],
     ]);
   });
 
@@ -156,20 +158,23 @@ describe("chartGeometry", () => {
 describe("buildAdminStatsPageProps", () => {
   it("表・折れ線・期間をまとめる", () => {
     const props = buildAdminStatsPageProps({
-      results: [stat(), stat({ service: "jam", total: null, error: "HTTP 401" })],
+      sources: [
+        { name: "grid24", url: "https://grid.hashrock.info" },
+        { name: "jam", url: "https://jam.hashrock.info" },
+      ],
       snapshots: [
-        { date: "2026-09-17", service: "grid24", total: 1200 },
-        { date: "2026-09-18", service: "grid24", total: 1234 },
-        { date: "2026-08-19", service: "grid24", total: 1 }, // 期間外は無視
+        snap({ date: "2026-09-17", total: 1200 }),
+        snap({ date: "2026-09-18", total: 1234 }),
+        snap({ date: "2026-08-19", total: 1 }), // 期間外は渡ってこない想定だが無視できる
       ],
       today: "2026-09-18",
     });
     expect(props.from).toBe("2026-08-20");
     expect(props.to).toBe("2026-09-18");
     expect(props.configError).toBeNull();
-    expect(props.rows.map((r) => [r.service, r.total, r.error])).toEqual([
-      ["grid24", "1,234", null],
-      ["jam", "—", "HTTP 401"],
+    expect(props.rows.map((r) => [r.service, r.total])).toEqual([
+      ["grid24", "1,234"],
+      ["jam", "—"],
     ]);
     expect(props.charts.map((c) => [c.service, c.latest, c.min, c.max, c.dots.length])).toEqual([
       ["grid24", 1234, 1200, 1234, 2],
@@ -179,7 +184,7 @@ describe("buildAdminStatsPageProps", () => {
 
   it("設定エラーを渡す", () => {
     const props = buildAdminStatsPageProps({
-      results: [],
+      sources: [],
       snapshots: [],
       today: "2026-09-18",
       configError: "STATS_SOURCES は配列にしてください",
