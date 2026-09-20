@@ -14,5 +14,7 @@
 | 記録 | `signup_snapshots` (date, service が主キー)。毎日 UTC 0 時の Cron と `POST /admin/api/stats/refresh` が upsert する。取得に失敗したサービスは書かない (同じ日の成功した値を残す) |
 | 画面 | `/admin/stats`。表も折れ線も `signup_snapshots` だけを見る (開くだけでは取りに行かない)。表はサービスごとに直近 30 日で一番新しい記録、折れ線はその 30 日分。今の値が要るときは「今すぐ記録」を押す |
 
+デプロイは [deploy.md](./deploy.md) を見ること (main への push で自動)。
+
 ローカルで Cron を試すとき: `npm run build && npx wrangler dev --test-scheduled` のあと
 `curl "http://localhost:8787/__scheduled?cron=0+0+*+*+*"`。
